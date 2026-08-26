@@ -11,8 +11,8 @@ from openmill.core.models import Project
 from openmill.integration.bridge import ProgramBridge
 from openmill.ui.preview_3d import VtkPreview
 from openmill.ui.qt_core import QEvent, QTimer
-from openmill.ui.qt_gui import QColor, QTextCursor
-from openmill.ui.qt_widgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from openmill.ui.qt_gui import QColor, QTextCursor, QTextFormat
+from openmill.ui.qt_widgets import QHBoxLayout, QLabel, QPushButton, QTextEdit, QVBoxLayout, QWidget
 from openmill.ui.theme import STYLESHEET
 
 
@@ -200,6 +200,31 @@ QWidget#gcodetextedit {{
             viewport = getattr(self._editor, "viewport", lambda: None)()
             if viewport is not None:
                 viewport.update()
+        self._highlight_editor_line(current_line)
+
+    def _highlight_editor_line(self, line: int) -> None:
+        """Draw a stable full-width marker independent of QtPyVCP internals."""
+        if self._editor is None:
+            return
+        document = self._editor.document()
+        block = document.findBlockByLineNumber(max(0, line - 1))
+        if not block.isValid():
+            return
+        selection = QTextEdit.ExtraSelection()
+        selection.cursor = QTextCursor(block)
+        selection.cursor.clearSelection()
+        selection.format.setBackground(QColor("#23604c"))
+        selection.format.setForeground(QColor("#ffffff"))
+        full_width = getattr(QTextFormat, "FullWidthSelection", None)
+        if full_width is None:
+            full_width = QTextFormat.Property.FullWidthSelection
+        selection.format.setProperty(full_width, True)
+        # Preserve QtPyVCP's optional search-result markers. Calling
+        # setExtraSelections directly is intentional: recent GcodeTextEdit
+        # versions lose their native marker whenever setDocument() reloads a
+        # program while the cursor remains on the same block number.
+        search_markers = list(getattr(self._editor, "highlight_selections", []))
+        self._editor.setExtraSelections([selection, *search_markers])
 
     def _editor_cursor_changed(self, line: int | None = None, *_args) -> None:
         if self._editor is None or self.host is None or self._parsed is None:
@@ -225,6 +250,7 @@ QWidget#gcodetextedit {{
         if motion_count != self._last_preview_motion_count:
             self.host.set_motion_index(motion_count)
             self._last_preview_motion_count = motion_count
+        self._highlight_editor_line(line)
         self.host.show_openmill()
         if self._status is not None:
             total = max(motion_counts, default=0)
@@ -244,6 +270,7 @@ QWidget#gcodetextedit {{
         else:
             cursor = QTextCursor(document.findBlockByLineNumber(target - 1))
             self._editor.setTextCursor(cursor)
+        self._highlight_editor_line(target)
         if hasattr(self._editor, "ensureCursorVisible"):
             self._editor.ensureCursorVisible()
         if hasattr(self._editor, "setFocus"):

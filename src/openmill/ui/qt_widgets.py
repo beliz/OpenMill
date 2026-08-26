@@ -34,6 +34,6 @@ QSpinBox = QtWidgets.QSpinBox
 QSplitter = QtWidgets.QSplitter
 QStackedWidget = QtWidgets.QStackedWidget
 QTabWidget = QtWidgets.QTabWidget
+QTextEdit = QtWidgets.QTextEdit
 QVBoxLayout = QtWidgets.QVBoxLayout
 QWidget = QtWidgets.QWidget
-

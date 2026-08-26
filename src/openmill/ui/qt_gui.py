@@ -12,3 +12,4 @@ QPainterPath = QtGui.QPainterPath
 QPen = QtGui.QPen
 QPolygonF = QtGui.QPolygonF
 QTextCursor = QtGui.QTextCursor
+QTextFormat = QtGui.QTextFormat

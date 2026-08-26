@@ -313,6 +313,10 @@ class IntegrationPackageTests(unittest.TestCase):
         self.assertIn("self._editor.setProperty(property_name, QColor(color))", source_text)
         self.assertIn('getattr(self._editor, "focusLine", None)', source_text)
         self.assertIn("setter(target)", source_text)
+        self.assertIn("QTextEdit.ExtraSelection()", source_text)
+        self.assertIn('selection.format.setBackground(QColor("#23604c"))', source_text)
+        self.assertIn('selection.format.setForeground(QColor("#ffffff"))', source_text)
+        self.assertIn("self._editor.setExtraSelections([selection, *search_markers])", source_text)
         self.assertIn("selection-color: #ffffff", source_text)
 
     def test_gcode_cursor_updates_are_debounced(self) -> None:
