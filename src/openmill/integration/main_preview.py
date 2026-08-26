@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 
 from openmill.adapters.base import MachineAdapter
@@ -164,14 +165,13 @@ class ProbeBasicPreviewController:
         if self._editor is None:
             self._editor = window.findChild(QWidget, "gcodetextedit")
         self._style_gcode_editor()
-        # GcodeTextEdit emits focusLine only after its own ExtraSelection has
-        # highlighted the row. It is more reliable than observing the raw Qt
-        # cursor signal and also follows LinuxCNC's live motion line.
-        signal = getattr(self._editor, "focusLine", None) if self._editor is not None else None
-        if signal is None and self._editor is not None:
-            signal = getattr(self._editor, "cursorPositionChanged", None)
-        if signal is not None:
-            signal.connect(self._editor_cursor_changed)
+        # Versions of GcodeTextEdit differ in when focusLine is emitted. Listen
+        # to both signals; the single-shot timer below coalesces the duplicate.
+        if self._editor is not None:
+            for signal_name in ("focusLine", "cursorPositionChanged"):
+                signal = getattr(self._editor, signal_name, None)
+                if signal is not None:
+                    signal.connect(self._editor_cursor_changed)
 
     def _style_gcode_editor(self) -> None:
         if self._editor is None:
@@ -199,6 +199,7 @@ QWidget#gcodetextedit_2 {{
         }
         for property_name, color in colors.items():
             self._editor.setProperty(property_name, QColor(color))
+        self._enable_syntax_highlighting()
         setter = getattr(self._editor, "setCurrentLine", None)
         if callable(setter):
             setter(current_line)
@@ -207,6 +208,30 @@ QWidget#gcodetextedit_2 {{
             if viewport is not None:
                 viewport.update()
         self._highlight_editor_line(current_line)
+
+    def _enable_syntax_highlighting(self) -> bool:
+        """Enable QtPyVCP's native G-code highlighter now and after reloads."""
+        if self._editor is None:
+            return False
+        self._editor.setProperty("syntaxHighlighting", True)
+        if hasattr(self._editor, "syntax_highlighting"):
+            self._editor.syntax_highlighting = True
+        current = getattr(self._editor, "gCodeHighlighter", None)
+        if current is not None:
+            try:
+                if current.document() is self._editor.document():
+                    return True
+            except (AttributeError, RuntimeError):
+                pass
+        try:
+            module = importlib.import_module(type(self._editor).__module__)
+            highlighter_type = getattr(module, "GcodeSyntaxHighlighter")
+            self._editor.gCodeHighlighter = highlighter_type(
+                self._editor.document(), self._editor.font
+            )
+        except (AttributeError, ImportError, OSError, RuntimeError, TypeError, ValueError):
+            return False
+        return True
 
     def _highlight_editor_line(self, line: int) -> None:
         """Draw a stable full-width marker independent of QtPyVCP internals."""

@@ -315,13 +315,21 @@ class IntegrationPackageTests(unittest.TestCase):
         self.assertLess(main_editor, file_editor)
         self.assertIn("QWidget#gcodetextedit_2", source_text)
         self.assertIn("self._editor.setProperty(property_name, QColor(color))", source_text)
-        self.assertIn('getattr(self._editor, "focusLine", None)', source_text)
+        self.assertIn('(\"focusLine\", \"cursorPositionChanged\")', source_text)
         self.assertIn("setter(target)", source_text)
         self.assertIn("QTextEdit.ExtraSelection()", source_text)
         self.assertIn('selection.format.setBackground(QColor("#23604c"))', source_text)
         self.assertIn('selection.format.setForeground(QColor("#ffffff"))', source_text)
         self.assertIn("self._editor.setExtraSelections([selection, *search_markers])", source_text)
         self.assertIn("selection-color: #ffffff", source_text)
+
+    def test_main_gcode_syntax_highlighting_is_permanent(self) -> None:
+        source_text = (
+            self.root / "src/openmill/integration/main_preview.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('self._editor.setProperty("syntaxHighlighting", True)', source_text)
+        self.assertIn('getattr(module, "GcodeSyntaxHighlighter")', source_text)
+        self.assertIn("self._editor.document(), self._editor.font", source_text)
 
     def test_gcode_cursor_updates_are_debounced(self) -> None:
         source_text = (
