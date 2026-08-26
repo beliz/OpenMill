@@ -38,7 +38,18 @@ jobs:
           PYTHONUSERBASE="$INSTALL_TEST_DIR/userbase" ./installation.sh install --ini "$INSTALL_TEST_DIR/config/machine.ini"
           PYTHONUSERBASE="$INSTALL_TEST_DIR/userbase" ./installation.sh install --ini "$INSTALL_TEST_DIR/config/machine.ini"
           test "$(grep -c 'BEGIN OPENMILL USER TAB' "$INSTALL_TEST_DIR/config/machine.ini")" -eq 1
+          test "$(grep -c 'BEGIN OPENMILL SPLASH' "$INSTALL_TEST_DIR/config/machine.ini")" -eq 1
+          grep -q '^INTRO_GRAPHIC = openmill-splash.gif$' "$INSTALL_TEST_DIR/config/machine.ini"
+          test -f "$INSTALL_TEST_DIR/config/openmill-splash.gif"
           PYTHONUSERBASE="$INSTALL_TEST_DIR/userbase" ./installation.sh check --ini "$INSTALL_TEST_DIR/config/machine.ini"
           PYTHONUSERBASE="$INSTALL_TEST_DIR/userbase" ./installation.sh uninstall --ini "$INSTALL_TEST_DIR/config/machine.ini"
           test ! -e "$INSTALL_TEST_DIR/config/user_tabs/openmill/openmill.py"
+          test ! -e "$INSTALL_TEST_DIR/config/openmill-splash.gif"
+          ! grep -q '^INTRO_GRAPHIC' "$INSTALL_TEST_DIR/config/machine.ini"
           test ! -e "$INSTALL_TEST_DIR/userbase/lib/python${{ matrix.python }}/site-packages/openmill-conversational.pth"
+          mkdir -p "$INSTALL_TEST_DIR/existing-config"
+          cp tests/fixtures/probe_basic_existing_splash.ini "$INSTALL_TEST_DIR/existing-config/machine.ini"
+          PYTHONUSERBASE="$INSTALL_TEST_DIR/userbase" ./installation.sh install --ini "$INSTALL_TEST_DIR/existing-config/machine.ini"
+          grep -q '^INTRO_GRAPHIC = openmill-splash.gif$' "$INSTALL_TEST_DIR/existing-config/machine.ini"
+          PYTHONUSERBASE="$INSTALL_TEST_DIR/userbase" ./installation.sh uninstall --ini "$INSTALL_TEST_DIR/existing-config/machine.ini"
+          grep -q '^INTRO_GRAPHIC = probebasic.gif$' "$INSTALL_TEST_DIR/existing-config/machine.ini"

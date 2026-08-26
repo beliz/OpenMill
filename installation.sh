@@ -7,9 +7,16 @@ set -Eeuo pipefail
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SOURCE_DIR="${SCRIPT_DIR}/src"
 readonly USER_TAB_SOURCE="${SCRIPT_DIR}/examples/probe_basic/user_tabs/openmill"
+readonly SPLASH_SOURCE="${SCRIPT_DIR}/assets/openmill-splash.gif"
+readonly SPLASH_FILENAME="openmill-splash.gif"
 readonly INI_MARKER_BEGIN="# BEGIN OPENMILL USER TAB"
 readonly INI_MARKER_END="# END OPENMILL USER TAB"
+readonly SPLASH_MARKER_BEGIN="# BEGIN OPENMILL SPLASH"
+readonly SPLASH_MARKER_END="# END OPENMILL SPLASH"
+readonly SPLASH_PREVIOUS_PREFIX="# OPENMILL_PREVIOUS_INTRO_GRAPHIC = "
+readonly SPLASH_ABSENT="__ABSENT__"
 readonly MANAGED_MARKER=".openmill-managed"
+readonly SPLASH_MANAGED_MARKER=".openmill-splash-managed"
 
 ACTION="install"
 INI_FILE=""
@@ -68,6 +75,7 @@ done
 [[ -d "$SOURCE_DIR/openmill" ]] || die "Le dossier src/openmill est introuvable."
 [[ -f "$USER_TAB_SOURCE/openmill.py" && -f "$USER_TAB_SOURCE/openmill.ui" ]] \
     || die "Les fichiers de l'onglet Probe Basic sont incomplets."
+[[ -f "$SPLASH_SOURCE" ]] || die "Le splash OpenMill est introuvable : $SPLASH_SOURCE"
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || die "Python introuvable : $PYTHON_BIN"
 [[ -z "${SUDO_USER:-}" ]] \
     || die "Ne lance pas cet installateur avec sudo : il doit utiliser le compte de Probe Basic."
@@ -209,6 +217,124 @@ remove_ini_block() {
     success "Déclaration USER_TABS_PATH ajoutée par OpenMill supprimée."
 }
 
+read_intro_graphic() {
+    awk '
+        /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+            line=tolower($0); gsub(/[[:space:]]/, "", line)
+            in_display=(line == "[display]")
+            next
+        }
+        in_display && tolower($0) ~ /^[[:space:]]*intro_graphic[[:space:]]*=/ {
+            value=$0
+            sub(/^[^=]*=[[:space:]]*/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            print value
+            exit
+        }
+    ' "$INI_FILE"
+}
+
+add_splash_ini_block() {
+    grep -Fq "$SPLASH_MARKER_BEGIN" "$INI_FILE" && return 0
+
+    local previous temporary backup
+    previous="$(read_intro_graphic)"
+    [[ -n "$previous" ]] || previous="$SPLASH_ABSENT"
+    temporary="$(mktemp "${INI_FILE}.openmill.XXXXXX")"
+    backup="${INI_FILE}.openmill-backup-splash-$(date +%Y%m%d-%H%M%S)"
+    cp -a -- "$INI_FILE" "$backup"
+
+    if ! awk \
+        -v begin="$SPLASH_MARKER_BEGIN" \
+        -v end="$SPLASH_MARKER_END" \
+        -v prefix="$SPLASH_PREVIOUS_PREFIX" \
+        -v previous="$previous" \
+        -v filename="$SPLASH_FILENAME" '
+        function insert_block(add_separator) {
+            if (add_separator) print ""
+            print begin
+            print prefix previous
+            print "INTRO_GRAPHIC = " filename
+            print end
+            inserted=1
+        }
+        /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+            line=tolower($0); gsub(/[[:space:]]/, "", line)
+            if (in_display && !inserted) insert_block(1)
+            in_display=(line == "[display]")
+            if (in_display) found_display=1
+        }
+        in_display && tolower($0) ~ /^[[:space:]]*intro_graphic[[:space:]]*=/ {
+            if (!inserted) insert_block(0)
+            next
+        }
+        { print }
+        END {
+            if (in_display && !inserted) insert_block(1)
+            if (!found_display) exit 42
+        }
+    ' "$INI_FILE" > "$temporary"; then
+        rm -f -- "$temporary"
+        die "Impossible de configurer INTRO_GRAPHIC dans [DISPLAY]."
+    fi
+    chmod --reference="$INI_FILE" "$temporary" 2>/dev/null || true
+    mv -- "$temporary" "$INI_FILE"
+    success "Splash déclaré dans l'INI (sauvegarde : $backup)."
+}
+
+remove_splash_ini_block() {
+    grep -Fq "$SPLASH_MARKER_BEGIN" "$INI_FILE" || return 0
+    local temporary
+    temporary="$(mktemp "${INI_FILE}.openmill.XXXXXX")"
+    awk \
+        -v begin="$SPLASH_MARKER_BEGIN" \
+        -v end="$SPLASH_MARKER_END" \
+        -v prefix="$SPLASH_PREVIOUS_PREFIX" \
+        -v absent="$SPLASH_ABSENT" '
+        $0 == begin { skipping=1; previous=absent; next }
+        skipping && index($0, prefix) == 1 { previous=substr($0, length(prefix) + 1); next }
+        $0 == end {
+            if (previous != absent) print "INTRO_GRAPHIC = " previous
+            skipping=0
+            next
+        }
+        !skipping { print }
+    ' "$INI_FILE" > "$temporary"
+    chmod --reference="$INI_FILE" "$temporary" 2>/dev/null || true
+    mv -- "$temporary" "$INI_FILE"
+    success "Ancien INTRO_GRAPHIC restauré."
+}
+
+install_splash() {
+    local target marker backup
+    target="${CONFIG_DIR}/${SPLASH_FILENAME}"
+    marker="${CONFIG_DIR}/${SPLASH_MANAGED_MARKER}"
+    if [[ -f "$target" && ! -f "$marker" ]] && ! cmp -s -- "$SPLASH_SOURCE" "$target"; then
+        backup="${target}.backup-$(date +%Y%m%d-%H%M%S)"
+        cp -a -- "$target" "$backup"
+        warning "Le splash existant a été sauvegardé dans $backup."
+    fi
+    install -m 0644 -- "$SPLASH_SOURCE" "$target"
+    printf 'Managed by OpenMill installation.sh\nSource: %s\n' "$SPLASH_SOURCE" > "$marker"
+    add_splash_ini_block
+    success "Splash OpenMill installé : $target"
+}
+
+remove_splash() {
+    local target marker
+    target="${CONFIG_DIR}/${SPLASH_FILENAME}"
+    marker="${CONFIG_DIR}/${SPLASH_MANAGED_MARKER}"
+    remove_splash_ini_block
+    [[ -f "$marker" ]] || return 0
+    if [[ ! -f "$target" ]] || cmp -s -- "$SPLASH_SOURCE" "$target"; then
+        rm -f -- "$target" "$marker"
+        success "Splash OpenMill supprimé."
+    else
+        rm -f -- "$marker"
+        warning "$target a été modifié après installation ; il est conservé."
+    fi
+}
+
 python_site_dir() {
     "$PYTHON_BIN" -m site --user-site
 }
@@ -280,7 +406,7 @@ remove_user_tab() {
 }
 
 run_checks() {
-    local tabs_root="$1" target="$2" failures=0 version_file version
+    local tabs_root="$1" target="$2" failures=0 version_file version splash_target
     info "Vérification de l'installation…"
     [[ -f "$target/openmill.py" && -f "$target/openmill.ui" ]] \
         && success "Onglet utilisateur complet." \
@@ -288,6 +414,25 @@ run_checks() {
     [[ -d "$tabs_root" ]] \
         && success "USER_TABS_PATH résolu : $tabs_root" \
         || { warning "USER_TABS_PATH n'existe pas : $tabs_root"; failures=$((failures + 1)); }
+    splash_target="${CONFIG_DIR}/${SPLASH_FILENAME}"
+    if [[ -f "$splash_target" ]] \
+        && awk -v filename="$SPLASH_FILENAME" '
+            /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+                line=tolower($0); gsub(/[[:space:]]/, "", line)
+                in_display=(line == "[display]")
+                next
+            }
+            in_display && tolower($0) ~ /^[[:space:]]*intro_graphic[[:space:]]*=/ {
+                value=$0; sub(/^[^=]*=[[:space:]]*/, "", value); sub(/[[:space:]]+$/, "", value)
+                if (value == filename) found=1
+            }
+            END { exit(found ? 0 : 1) }
+        ' "$INI_FILE"; then
+        success "Splash OpenMill actif."
+    else
+        warning "Splash OpenMill absent ou INTRO_GRAPHIC incorrect."
+        failures=$((failures + 1))
+    fi
 
     version_file="$(mktemp /tmp/openmill-version.XXXXXX)"
     if OPENMILL_EXPECTED_SOURCE="$SOURCE_DIR" "$PYTHON_BIN" - <<'PY' >"$version_file" 2>/dev/null
@@ -353,6 +498,7 @@ case "$ACTION" in
     install)
         install_python_link
         install_user_tab "$tab_target"
+        install_splash
         run_checks "$tabs_root" "$tab_target"
         printf '\n'
         success "Installation terminée. Redémarre LinuxCNC / Probe Basic."
@@ -364,6 +510,7 @@ case "$ACTION" in
     uninstall)
         remove_user_tab "$tab_target"
         remove_python_link
+        remove_splash
         remove_ini_block
         success "Désinstallation terminée. Les sauvegardes INI éventuelles sont conservées."
         ;;

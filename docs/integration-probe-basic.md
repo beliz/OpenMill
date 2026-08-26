@@ -1,6 +1,6 @@
 # Intégrer OpenMill dans Probe Basic
 
-OpenMill 0.5.0 s’intègre comme **onglet utilisateur**, sans modifier le dépôt Probe Basic et sans faire de fork. La même extension fonctionne en simulation et sur une installation LinuxCNC réelle.
+OpenMill 0.5.1 s’intègre comme **onglet utilisateur**, sans modifier le dépôt Probe Basic et sans faire de fork. La même extension fonctionne en simulation et sur une installation LinuxCNC réelle.
 
 > Le chargement du programme et le départ cycle sont volontairement séparés. OpenMill ne démarre jamais une broche, un déplacement ou un programme.
 
@@ -13,7 +13,7 @@ chmod +x installation.sh
 ./installation.sh --ini /chemin/vers/configuration-machine/machine.ini
 ```
 
-L’installateur ne passe pas par `pip`. Il ajoute au Python utilisateur un fichier `.pth` pointant vers `src/`, ce qui évite l’erreur `externally-managed-environment` de Debian et permet de mettre le code à jour avec Git. Il sauvegarde l’INI avant modification, respecte un éventuel `USER_TABS_PATH` existant, copie l’onglet et lance le diagnostic simulé.
+L’installateur ne passe pas par `pip`. Il ajoute au Python utilisateur un fichier `.pth` pointant vers `src/`, ce qui évite l’erreur `externally-managed-environment` de Debian et permet de mettre le code à jour avec Git. Il sauvegarde l’INI avant modification, respecte un éventuel `USER_TABS_PATH` existant, installe le splash OpenMill, copie l’onglet et lance le diagnostic simulé.
 
 Commandes complémentaires :
 
@@ -23,6 +23,8 @@ Commandes complémentaires :
 ```
 
 Après un `git pull`, relancer la commande d’installation met à jour la copie des deux fichiers de l’onglet. L’opération est idempotente.
+
+Le splash est copié sous le nom `openmill-splash.gif` à côté du fichier INI et déclaré dans `[DISPLAY]`. L’ancienne valeur de `INTRO_GRAPHIC` est mémorisée dans un bloc balisé : la désinstallation la restaure automatiquement et n’efface jamais une image modifiée par l’utilisateur.
 
 ## 1. Vérifier l’environnement
 
@@ -82,6 +84,7 @@ Dans le fichier INI de la configuration LinuxCNC, ajouter ou conserver :
 ```ini
 [DISPLAY]
 USER_TABS_PATH = user_tabs/
+INTRO_GRAPHIC = openmill-splash.gif
 ```
 
 Important : ne pas ajouter de commentaire à la fin de cette ligne. Certains chargeurs Probe Basic interprètent autrement le chemin.
@@ -111,6 +114,8 @@ Exemple depuis le dossier OpenMill :
 mkdir -p /chemin/vers/configuration-machine/user_tabs
 cp -R examples/probe_basic/user_tabs/openmill \
       /chemin/vers/configuration-machine/user_tabs/
+cp assets/openmill-splash.gif \
+   /chemin/vers/configuration-machine/openmill-splash.gif
 ```
 
 Redémarrer Probe Basic. Un nouvel onglet **CONVERSATIONNEL** doit apparaître.

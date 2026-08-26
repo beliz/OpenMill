@@ -2,7 +2,7 @@
 
 Atelier conversationnel de fraisage CNC, pensé pour être développé sous **Windows**, utilisé avec **LinuxCNC**, puis intégré proprement dans **Probe Basic / QtPyVCP**.
 
-**Version 0.5.0 — premiers profils universels, rainure droite et installateur Probe Basic.**
+**Version 0.5.1 — splash OpenMill moderne et installation Probe Basic réversible.**
 
 L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d’usinage, les opérations, les aperçus et la connexion machine sont séparés. Le même `QWidget` peut fonctionner comme application autonome ou devenir un onglet d’une interface LinuxCNC.
 
@@ -32,6 +32,7 @@ L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d�
 - Export de programmes `.ngc` et sauvegarde JSON versionnée.
 - Interface intégralement en français, bibliothèque d’outils simulée et adaptateur LinuxCNC séparé.
 - Onglet Probe Basic automatique avec `USER_TABS_PATH`, sans fork ni modification upstream.
+- Splash de démarrage OpenMill moderne, installé automatiquement et restauré proprement à la désinstallation.
 - Compatibilité avec les environnements Probe Basic PyQt5 et PySide6.
 - Chargement sécurisé du G-code dans Probe Basic / LinuxCNC, sans départ cycle automatique.
 - G-code ASCII strict pour les éditeurs Probe Basic historiques, avec fins de ligne Linux.
@@ -119,8 +120,9 @@ Le script :
 2. relie `src/openmill` au Python utilisateur avec un fichier `.pth`, sans `pip`, sans `sudo` et sans contourner PEP 668 ;
 3. conserve un éventuel `USER_TABS_PATH` existant ou ajoute proprement `USER_TABS_PATH = user_tabs/` dans `[DISPLAY]` ;
 4. sauvegarde le fichier INI avant toute modification ;
-5. copie `openmill.py` et `openmill.ui` dans le dossier d’onglets de la configuration ;
-6. vérifie l’import Python et exécute une génération/charge simulée complète.
+5. installe le splash OpenMill et remplace réversiblement `INTRO_GRAPHIC` ;
+6. copie `openmill.py` et `openmill.ui` dans le dossier d’onglets de la configuration ;
+7. vérifie l’import Python et exécute une génération/charge simulée complète.
 
 Si plusieurs configurations sont détectées, le script propose une liste. Le chemin peut aussi être donné sous forme de dossier :
 
@@ -174,7 +176,17 @@ Dans le fichier INI de la configuration LinuxCNC, ajouter :
 ```ini
 [DISPLAY]
 USER_TABS_PATH = user_tabs/
+INTRO_GRAPHIC = openmill-splash.gif
 ```
+
+Copier également le splash à côté du fichier INI :
+
+```bash
+cp assets/openmill-splash.gif \
+   ~/linuxcnc/configs/ma-machine/openmill-splash.gif
+```
+
+Le [PNG maître](assets/openmill-splash.png) est fourni pour les versions récentes de Probe Basic ; le GIF 584 × 730 reste le choix compatible avec les configurations historiques utilisant `probebasic.gif`.
 
 Ne pas ajouter de commentaire après la valeur. Copier ensuite le dossier fourni :
 
@@ -189,6 +201,7 @@ La structure obtenue doit être :
 ```text
 ma-machine/
 ├── ma-machine.ini
+├── openmill-splash.gif
 └── user_tabs/
     └── openmill/
         ├── openmill.py
