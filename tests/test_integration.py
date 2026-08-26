@@ -295,6 +295,23 @@ class IntegrationPackageTests(unittest.TestCase):
         self.assertNotIn("setParent", source_text)
         self.assertIn("layout.insertWidget(index + 1, self.host)", source_text)
 
+    def test_main_preview_switch_stays_available_over_native_vtk(self) -> None:
+        source_text = (
+            self.root / "src/openmill/integration/main_preview.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('QPushButton("OpenMill", self._native)', source_text)
+        self.assertIn("self._native.installEventFilter(self)", source_text)
+        self.assertIn("self._native_switch.show()", source_text)
+        self.assertIn("button.raise_()", source_text)
+
+    def test_gcode_navigation_selects_and_styles_the_current_line(self) -> None:
+        source_text = (
+            self.root / "src/openmill/integration/main_preview.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("QTextCursor.EndOfBlock, QTextCursor.KeepAnchor", source_text)
+        self.assertIn('"setCurrentLineBackground": "#17372f"', source_text)
+        self.assertIn("selection-color: #ffffff", source_text)
+
 
 if __name__ == "__main__":
     unittest.main()

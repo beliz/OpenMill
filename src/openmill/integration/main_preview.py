@@ -10,8 +10,8 @@ from openmill.core.gcode_parser import ParsedGcode, parse_gcode_file
 from openmill.core.models import Project
 from openmill.integration.bridge import ProgramBridge
 from openmill.ui.preview_3d import VtkPreview
-from openmill.ui.qt_core import QTimer
-from openmill.ui.qt_gui import QTextCursor
+from openmill.ui.qt_core import QEvent, QTimer
+from openmill.ui.qt_gui import QColor, QTextCursor
 from openmill.ui.qt_widgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 from openmill.ui.theme import STYLESHEET
 
@@ -34,6 +34,19 @@ class ProbeBasicMainPreview(QWidget):
         self.setObjectName("openmillMainPreview")
         self.setStyleSheet(STYLESHEET)
         self._native = native_preview
+        self._has_content = False
+
+        # This button is deliberately a floating child of the native backplot:
+        # it remains available while OpenMill is hidden without taking space
+        # from Probe Basic's horizontal VTK layout.
+        self._native_switch = QPushButton("OpenMill", self._native)
+        self._native_switch.setObjectName("openmillNativePreviewSwitch")
+        self._native_switch.setStyleSheet(STYLESHEET)
+        self._native_switch.setToolTip("Afficher l’aperçu animé OpenMill")
+        self._native_switch.setMinimumSize(132, 42)
+        self._native_switch.setEnabled(False)
+        self._native_switch.clicked.connect(lambda _checked=False: self.show_openmill())
+        self._native.installEventFilter(self)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -55,17 +68,36 @@ class ProbeBasicMainPreview(QWidget):
         layout.addWidget(self._openmill, 1)
         self.show_native()
 
+    def eventFilter(self, watched, event) -> bool:
+        if watched is self._native and event.type() in (QEvent.Resize, QEvent.Show):
+            QTimer.singleShot(0, self._position_native_switch)
+        return super().eventFilter(watched, event)
+
+    def _position_native_switch(self) -> None:
+        button = self._native_switch
+        width = max(button.minimumWidth(), button.sizeHint().width() + 20)
+        height = max(button.minimumHeight(), button.sizeHint().height() + 8)
+        button.resize(width, height)
+        button.move(max(8, self._native.width() - width - 12), 12)
+        button.raise_()
+
     def show_native(self) -> None:
         self.hide()
         self._native.show()
+        self._native_switch.show()
+        self._position_native_switch()
 
     def show_openmill(self) -> None:
+        if not self._has_content:
+            return
         self._native.hide()
         self.show()
 
     def set_content(self, project: Project, result: BuildResult, *, source: str) -> None:
         self._openmill.set_content(project, result)
         self._status.setText(source)
+        self._has_content = True
+        self._native_switch.setEnabled(True)
         self.show_openmill()
 
     def set_motion_index(self, motion_count: int) -> None:
@@ -120,9 +152,38 @@ class ProbeBasicPreviewController:
 
     def _connect_gcode_editor(self, window) -> None:
         self._editor = window.findChild(QWidget, "gcodetextedit")
+        self._style_gcode_editor()
         signal = getattr(self._editor, "cursorPositionChanged", None) if self._editor is not None else None
         if signal is not None:
             signal.connect(self._editor_cursor_changed)
+
+    def _style_gcode_editor(self) -> None:
+        if self._editor is None:
+            return
+        marker = "/* OPENMILL_GCODE_SELECTION */"
+        current = self._editor.styleSheet() or ""
+        if marker not in current:
+            self._editor.setStyleSheet(
+                f"""{current}
+{marker}
+QWidget#gcodetextedit {{
+    selection-background-color: #23604c;
+    selection-color: #ffffff;
+}}
+"""
+            )
+        # GcodeTextEdit exposes these Qt Designer properties. Probe Basic's
+        # default current-line background is almost white and clashes with the
+        # modern light text, so use a dark high-contrast line instead.
+        colors = {
+            "setCurrentLineBackground": "#17372f",
+            "setMarginCurrentLineBackground": "#23604c",
+            "setMarginCurrentLineColor": "#ffffff",
+        }
+        for setter_name, color in colors.items():
+            setter = getattr(self._editor, setter_name, None)
+            if callable(setter):
+                setter(QColor(color))
 
     def _editor_cursor_changed(self) -> None:
         if self._editor is None or self.host is None or self._parsed is None:
@@ -139,11 +200,17 @@ class ProbeBasicPreviewController:
         if self._editor is None:
             return
         cursor = self._editor.textCursor()
+        cursor.clearSelection()
+        cursor.movePosition(QTextCursor.StartOfBlock)
         operation = QTextCursor.Down if direction > 0 else QTextCursor.Up
-        cursor.movePosition(operation)
+        if not cursor.movePosition(operation):
+            return
+        cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
         self._editor.setTextCursor(cursor)
         if hasattr(self._editor, "ensureCursorVisible"):
             self._editor.ensureCursorVisible()
+        if hasattr(self._editor, "setFocus"):
+            self._editor.setFocus()
 
     @staticmethod
     def _compact_main_layout(window) -> None:

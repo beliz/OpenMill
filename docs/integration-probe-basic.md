@@ -1,6 +1,6 @@
 # Intégrer OpenMill dans Probe Basic
 
-OpenMill 0.4.1 s’intègre comme **onglet utilisateur**, sans modifier le dépôt Probe Basic et sans faire de fork. La même extension fonctionne en simulation et sur une installation LinuxCNC réelle.
+OpenMill 0.4.2 s’intègre comme **onglet utilisateur**, sans modifier le dépôt Probe Basic et sans faire de fork. La même extension fonctionne en simulation et sur une installation LinuxCNC réelle.
 
 > Le chargement du programme et le départ cycle sont volontairement séparés. OpenMill ne démarre jamais une broche, un déplacement ou un programme.
 
@@ -157,9 +157,9 @@ Le bouton **Charger dans Probe Basic** :
 
 Le programme publié est volontairement limité à l’ASCII 7 bits et utilise des fins de ligne Unix. Cette contrainte évite les interprétations erronées de l’UTF-8 observées dans certaines versions historiques de l’éditeur Probe Basic.
 
-Après chargement, OpenMill sélectionne automatiquement l’onglet `MAIN` et son aperçu animé. Le BackPlot Probe Basic d’origine reste accessible avec le bouton **Probe Basic**. Les deux moteurs occupent alternativement le même emplacement : OpenMill ne déplace, ne recrée et ne redimensionne plus le widget VTK natif.
+Après chargement, OpenMill sélectionne automatiquement l’onglet `MAIN` et son aperçu animé. Le BackPlot Probe Basic d’origine reste accessible avec le bouton **Probe Basic**. Lorsqu’il est affiché, un bouton flottant **OpenMill** permet de revenir à l’aperçu moderne. Les deux moteurs occupent alternativement le même emplacement : OpenMill ne déplace, ne recrée et ne redimensionne pas le widget VTK natif.
 
-Dans l’éditeur G-code de `MAIN`, cliquer sur une ligne positionne la chronologie OpenMill après les mouvements exécutés jusqu’à cette ligne. Les boutons **Ligne précédente** et **Ligne suivante** au-dessus de l’aperçu déplacent simultanément le curseur de l’éditeur et la scène 3D. Cette navigation est visuelle uniquement : elle ne change pas la ligne d’exécution LinuxCNC et ne commande aucun mouvement machine.
+Dans l’éditeur G-code de `MAIN`, cliquer sur une ligne positionne la chronologie OpenMill après les mouvements exécutés jusqu’à cette ligne. Les boutons **Ligne précédente** et **Ligne suivante** au-dessus de l’aperçu sélectionnent toute la ligne correspondante, la maintiennent visible et déplacent simultanément la scène 3D. La ligne courante utilise un fond sombre contrasté afin de préserver la lisibilité de la coloration syntaxique Probe Basic. Cette navigation est visuelle uniquement : elle ne change pas la ligne d’exécution LinuxCNC et ne commande aucun mouvement machine.
 
 ## 7. Aperçu des programmes externes
 
