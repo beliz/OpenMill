@@ -310,6 +310,10 @@ class IntegrationPackageTests(unittest.TestCase):
             self.root / "src/openmill/integration/main_preview.py"
         ).read_text(encoding="utf-8")
         self.assertIn('"currentLineBackground": "#17372f"', source_text)
+        main_editor = source_text.index('window.findChild(QWidget, "gcodetextedit_2")')
+        file_editor = source_text.index('window.findChild(QWidget, "gcodetextedit")')
+        self.assertLess(main_editor, file_editor)
+        self.assertIn("QWidget#gcodetextedit_2", source_text)
         self.assertIn("self._editor.setProperty(property_name, QColor(color))", source_text)
         self.assertIn('getattr(self._editor, "focusLine", None)', source_text)
         self.assertIn("setter(target)", source_text)

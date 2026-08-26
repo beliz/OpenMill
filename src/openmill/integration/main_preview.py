@@ -157,7 +157,12 @@ class ProbeBasicPreviewController:
         return True
 
     def _connect_gcode_editor(self, window) -> None:
-        self._editor = window.findChild(QWidget, "gcodetextedit")
+        # Probe Basic exposes two GcodeTextEdit instances. The unsuffixed one
+        # belongs to the FILE editor; MAIN uses gcodetextedit_2. Older layouts
+        # may only contain the unsuffixed widget, hence the fallback.
+        self._editor = window.findChild(QWidget, "gcodetextedit_2")
+        if self._editor is None:
+            self._editor = window.findChild(QWidget, "gcodetextedit")
         self._style_gcode_editor()
         # GcodeTextEdit emits focusLine only after its own ExtraSelection has
         # highlighted the row. It is more reliable than observing the raw Qt
@@ -177,7 +182,8 @@ class ProbeBasicPreviewController:
             self._editor.setStyleSheet(
                 f"""{current}
 {marker}
-QWidget#gcodetextedit {{
+QWidget#gcodetextedit,
+QWidget#gcodetextedit_2 {{
     selection-background-color: #23604c;
     selection-color: #ffffff;
 }}
