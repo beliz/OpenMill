@@ -34,6 +34,29 @@ _DARK_SYNTAX_COLORS = {
 }
 
 
+def _style_syntax_rules(highlighter) -> None:
+    """Adjust rule formats before Qt schedules its first highlighting pass."""
+    for _pattern, text_format in getattr(highlighter, "rules", ()):
+        source = text_format.foreground().color().name().lower()
+        replacement = _DARK_SYNTAX_COLORS.get(source)
+        if replacement is not None:
+            text_format.setForeground(QColor(replacement))
+
+
+def _install_dark_syntax_palette(highlighter_type) -> None:
+    """Style current and future QtPyVCP highlighters without rehighlighting."""
+    if getattr(highlighter_type, "_openmill_dark_palette_installed", False):
+        return
+    original_init = highlighter_type.__init__
+
+    def initialize_with_dark_palette(instance, *args, **kwargs) -> None:
+        original_init(instance, *args, **kwargs)
+        _style_syntax_rules(instance)
+
+    highlighter_type.__init__ = initialize_with_dark_palette
+    highlighter_type._openmill_dark_palette_installed = True
+
+
 def select_probe_basic_main(source_widget) -> bool:
     window = source_widget.window()
     tabs = window.findChild(QWidget, "tabWidget")
@@ -136,7 +159,6 @@ class ProbeBasicPreviewController:
         self._current_signature: tuple[str, int, int] | None = None
         self._pending_editor_line: int | None = None
         self._last_preview_motion_count: int | None = None
-        self._styled_highlighter = None
         self._editor_timer = QTimer(owner)
         self._editor_timer.setSingleShot(True)
         self._editor_timer.setInterval(75)
@@ -233,6 +255,12 @@ QWidget#gcodetextedit_2 {{
         """Enable QtPyVCP's native G-code highlighter now and after reloads."""
         if self._editor is None:
             return False
+        try:
+            module = importlib.import_module(type(self._editor).__module__)
+            highlighter_type = getattr(module, "GcodeSyntaxHighlighter")
+            _install_dark_syntax_palette(highlighter_type)
+        except (AttributeError, ImportError, OSError, RuntimeError, TypeError, ValueError):
+            return False
         self._editor.setProperty("syntaxHighlighting", True)
         if hasattr(self._editor, "syntax_highlighting"):
             self._editor.syntax_highlighting = True
@@ -240,40 +268,16 @@ QWidget#gcodetextedit_2 {{
         if current is not None:
             try:
                 if current.document() is self._editor.document():
-                    self._apply_dark_syntax_palette()
+                    _style_syntax_rules(current)
                     return True
             except (AttributeError, RuntimeError):
                 pass
         try:
-            module = importlib.import_module(type(self._editor).__module__)
-            highlighter_type = getattr(module, "GcodeSyntaxHighlighter")
             self._editor.gCodeHighlighter = highlighter_type(
                 self._editor.document(), self._editor.font
             )
         except (AttributeError, ImportError, OSError, RuntimeError, TypeError, ValueError):
             return False
-        self._apply_dark_syntax_palette()
-        return True
-
-    def _apply_dark_syntax_palette(self) -> bool:
-        """Replace QtPyVCP's light-theme token colors with readable variants."""
-        if self._editor is None:
-            return False
-        highlighter = getattr(self._editor, "gCodeHighlighter", None)
-        if highlighter is None:
-            return False
-        if highlighter is self._styled_highlighter:
-            return True
-        try:
-            for _pattern, text_format in highlighter.rules:
-                source = text_format.foreground().color().name().lower()
-                replacement = _DARK_SYNTAX_COLORS.get(source)
-                if replacement is not None:
-                    text_format.setForeground(QColor(replacement))
-            highlighter.rehighlight()
-        except (AttributeError, RuntimeError, TypeError, ValueError):
-            return False
-        self._styled_highlighter = highlighter
         return True
 
     def _highlight_editor_line(self, line: int) -> None:
@@ -324,7 +328,6 @@ QWidget#gcodetextedit_2 {{
         if motion_count != self._last_preview_motion_count:
             self.host.set_motion_index(motion_count)
             self._last_preview_motion_count = motion_count
-        self._apply_dark_syntax_palette()
         self._highlight_editor_line(line)
         self.host.show_openmill()
         if self._status is not None:

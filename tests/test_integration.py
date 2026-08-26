@@ -331,8 +331,9 @@ class IntegrationPackageTests(unittest.TestCase):
         self.assertIn('getattr(module, "GcodeSyntaxHighlighter")', source_text)
         self.assertIn("self._editor.document(), self._editor.font", source_text)
         self.assertIn('"#0f0f0f": "#d6e4f0"', source_text)
-        self.assertIn("_DARK_SYNTAX_COLORS.get(source)", source_text)
-        self.assertIn("highlighter.rehighlight()", source_text)
+        self.assertIn("_install_dark_syntax_palette(highlighter_type)", source_text)
+        self.assertIn("_style_syntax_rules(instance)", source_text)
+        self.assertNotIn("rehighlight()", source_text)
         self.assertIn("color: #dce7f5", source_text)
 
     def test_gcode_cursor_updates_are_debounced(self) -> None:
