@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openmill-conversational"
+version = "0.4.1"
+description = "Portable conversational milling workbench designed for LinuxCNC and Probe Basic"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "OpenMill Conversational contributors"}]
+keywords = ["cnc", "linuxcnc", "probe-basic", "conversational", "cam", "milling"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: Manufacturing",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = []
+
+[project.optional-dependencies]
+gui = ["PyQt5>=5.15,<6", "vtk>=9.1,<10"]
+gui-pyside6 = ["PySide6>=6.5,<7", "vtk>=9.1,<10"]
+geometry = ["shapely>=2,<3"]
+dev = ["ruff>=0.6"]
+
+[project.scripts]
+openmill = "openmill.__main__:main"
+openmill-probe-check = "openmill.integration.check:main"
+
+[project.entry-points."qtpyvcp.widgets"]
+openmill_conversational = "openmill.integration.probe_basic"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

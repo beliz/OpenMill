@@ -1,0 +1,79 @@
+{
+  "name": "Plaque de démonstration",
+  "stock": {
+    "width": 140,
+    "height": 95,
+    "thickness": 18,
+    "origin": "lower_left"
+  },
+  "operations": [
+    {
+      "plugin_id": "facing",
+      "title": "Surfaçage de la face supérieure",
+      "tool_number": 4,
+      "parameters": {
+        "center_x": 70,
+        "center_y": 47.5,
+        "width": 140,
+        "height": 95,
+        "step_over": 65,
+        "z_start": 0,
+        "z_final": -0.4,
+        "step_down": 0.4,
+        "clearance": 5,
+        "feed_xy": 600,
+        "feed_z": 180,
+        "spindle_rpm": 12000
+      },
+      "enabled": true,
+      "uid": "demo_facing"
+    },
+    {
+      "plugin_id": "pocket_rectangle",
+      "title": "Poche centrale",
+      "tool_number": 1,
+      "parameters": {
+        "center_x": 70,
+        "center_y": 47.5,
+        "width": 76,
+        "height": 48,
+        "corner_radius": 8,
+        "step_over": 45,
+        "z_start": 0,
+        "z_final": -5,
+        "step_down": 1.25,
+        "clearance": 5,
+        "feed_xy": 600,
+        "feed_z": 180,
+        "spindle_rpm": 12000
+      },
+      "enabled": true,
+      "uid": "demo_pocket"
+    },
+    {
+      "plugin_id": "drill_circle",
+      "title": "Huit perçages sur cercle",
+      "tool_number": 5,
+      "parameters": {
+        "center_x": 70,
+        "center_y": 47.5,
+        "diameter": 76,
+        "hole_count": 8,
+        "start_angle": 22.5,
+        "sweep": 360,
+        "peck": 0,
+        "z_start": 0,
+        "z_final": -11,
+        "step_down": 1,
+        "clearance": 5,
+        "feed_xy": 600,
+        "feed_z": 180,
+        "spindle_rpm": 12000
+      },
+      "enabled": true,
+      "uid": "demo_drilling"
+    }
+  ],
+  "work_offset": "G54",
+  "schema_version": 1
+}

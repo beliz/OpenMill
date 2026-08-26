@@ -1,0 +1,22 @@
+name: Nouvelle opération ou amélioration
+description: Proposer une stratégie d’usinage, un aperçu ou une amélioration d’intégration.
+title: "[Fonctionnalité] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Besoin d’usinage
+      description: Quelle pièce, géométrie ou situation machine faut-il prendre en charge ?
+    validations:
+      required: true
+  - type: textarea
+    id: parameters
+    attributes:
+      label: Paramètres souhaités
+      placeholder: Dimensions, outil, profondeurs, stratégie, entrées/sorties…
+  - type: textarea
+    id: safety
+    attributes:
+      label: Contraintes de sécurité et vérifications
+      placeholder: Limites machine, collisions, bridage, outils, compensations…

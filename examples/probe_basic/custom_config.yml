@@ -1,0 +1,7 @@
+# Alternative only: USER_TABS_PATH is the preferred integration.
+# Merge this section into the existing machine custom_config.yml.
+windows:
+  mainwindow:
+    provider: custom_probebasic:CustomProbeBasic
+    kwargs:
+      confirm_exit: false
