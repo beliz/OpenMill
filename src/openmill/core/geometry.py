@@ -89,6 +89,55 @@ def rounded_rectangle_points(
     return points
 
 
+def capsule_points(
+    center_x: float,
+    center_y: float,
+    straight_length: float,
+    radius: float,
+    *,
+    rotation_degrees: float = 0.0,
+    segments_per_end: int = 12,
+    clockwise: bool = False,
+) -> list[tuple[float, float]]:
+    """Return a closed stadium/capsule centered on its straight segment.
+
+    ``straight_length`` is the distance between the two semicircle centres.  A
+    zero radius intentionally collapses to a back-and-forth centre line, which
+    is useful for clearing the middle of a slot.
+    """
+    if straight_length < 0:
+        raise ValueError("La longueur droite d’une rainure ne peut pas être négative.")
+    if radius < 0:
+        raise ValueError("Le rayon d’une rainure ne peut pas être négatif.")
+    if segments_per_end < 2:
+        raise ValueError("Chaque extrémité doit comporter au moins deux segments.")
+
+    half_straight = straight_length / 2
+    if radius <= 1e-9:
+        local_points = [(-half_straight, 0.0), (half_straight, 0.0), (-half_straight, 0.0)]
+    else:
+        local_points: list[tuple[float, float]] = []
+        for index in range(segments_per_end + 1):
+            angle = math.radians(-90 + 180 * index / segments_per_end)
+            local_points.append(
+                (half_straight + radius * math.cos(angle), radius * math.sin(angle))
+            )
+        for index in range(segments_per_end + 1):
+            angle = math.radians(90 + 180 * index / segments_per_end)
+            local_points.append(
+                (-half_straight + radius * math.cos(angle), radius * math.sin(angle))
+            )
+        local_points.append(local_points[0])
+
+    if clockwise:
+        local_points = list(reversed(local_points))
+    result: list[tuple[float, float]] = []
+    for x, y in local_points:
+        rotated_x, rotated_y = rotate_point(x, y, rotation_degrees)
+        result.append((center_x + rotated_x, center_y + rotated_y))
+    return result
+
+
 def regular_polygon_points(
     center_x: float,
     center_y: float,
@@ -120,4 +169,3 @@ def rotate_point(x: float, y: float, degrees: float) -> tuple[float, float]:
         x * math.cos(angle) - y * math.sin(angle),
         x * math.sin(angle) + y * math.cos(angle),
     )
-

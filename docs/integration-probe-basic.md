@@ -1,26 +1,51 @@
 # Intégrer OpenMill dans Probe Basic
 
-OpenMill 0.4.8 s’intègre comme **onglet utilisateur**, sans modifier le dépôt Probe Basic et sans faire de fork. La même extension fonctionne en simulation et sur une installation LinuxCNC réelle.
+OpenMill 0.5.0 s’intègre comme **onglet utilisateur**, sans modifier le dépôt Probe Basic et sans faire de fork. La même extension fonctionne en simulation et sur une installation LinuxCNC réelle.
 
 > Le chargement du programme et le départ cycle sont volontairement séparés. OpenMill ne démarre jamais une broche, un déplacement ou un programme.
 
-## 1. Vérifier l’environnement
+## Installation automatique recommandée
 
-Sur la machine LinuxCNC, ouvrir un terminal utilisant exactement le même Python que Probe Basic :
+Depuis le dépôt cloné sur la machine LinuxCNC :
 
 ```bash
-python3 -m pip install -e /chemin/vers/openmill-conversational
-openmill-probe-check --smoke-test
+chmod +x installation.sh
+./installation.sh --ini /chemin/vers/configuration-machine/machine.ini
+```
+
+L’installateur ne passe pas par `pip`. Il ajoute au Python utilisateur un fichier `.pth` pointant vers `src/`, ce qui évite l’erreur `externally-managed-environment` de Debian et permet de mettre le code à jour avec Git. Il sauvegarde l’INI avant modification, respecte un éventuel `USER_TABS_PATH` existant, copie l’onglet et lance le diagnostic simulé.
+
+Commandes complémentaires :
+
+```bash
+./installation.sh check --ini /chemin/vers/configuration-machine/machine.ini
+./installation.sh uninstall --ini /chemin/vers/configuration-machine/machine.ini
+```
+
+Après un `git pull`, relancer la commande d’installation met à jour la copie des deux fichiers de l’onglet. L’opération est idempotente.
+
+## 1. Vérifier l’environnement
+
+Pour une installation manuelle, ouvrir sur la machine LinuxCNC un terminal utilisant exactement le même Python que Probe Basic, puis exposer le dossier `src` dans son site utilisateur :
+
+```bash
+OPENMILL_SRC="$(realpath /chemin/vers/OpenMill/src)"
+PYTHON_USER_SITE="$(python3 -m site --user-site)"
+mkdir -p "$PYTHON_USER_SITE"
+printf '%s\n' "$OPENMILL_SRC" > "$PYTHON_USER_SITE/openmill-conversational.pth"
+python3 -m openmill.integration.check --smoke-test
 ```
 
 Le diagnostic affiche les versions Python, la présence de PyQt5, PySide6, VTK, LinuxCNC, QtPyVCP et Probe Basic, ainsi que le dossier de programmes détecté.
+
+Cette méthode ne modifie aucun paquet système et fonctionne avec la protection PEP 668 de Debian. Ne pas ajouter `--break-system-packages` par réflexe.
 
 Le test simulé construit réellement le projet de démonstration, génère son G-code, puis le charge dans un hôte simulé. Il ne demande ni connexion machine ni interface graphique.
 
 La sortie structurée est aussi disponible :
 
 ```bash
-openmill-probe-check --json --smoke-test
+python3 -m openmill.integration.check --json --smoke-test
 ```
 
 Sous Windows, dans l’environnement virtuel créé par le lanceur :
@@ -40,11 +65,7 @@ OpenMill détecte le binding déjà chargé par Probe Basic et **n’importe jam
 - aucun binding chargé → `QT_API=pyside6` donne priorité à PySide6 ;
 - sinon, PyQt5 reste le choix autonome par défaut sous Windows.
 
-Sur LinuxCNC, réutiliser les dépendances système existantes :
-
-```bash
-python3 -m pip install -e /chemin/vers/openmill-conversational
-```
+Sur LinuxCNC, réutiliser les dépendances Qt et VTK déjà fournies par l’environnement Probe Basic. Le fichier `.pth` ou l’installateur suffit pour OpenMill, dont le noyau ne déclare aucune dépendance Python obligatoire.
 
 Ne pas installer simultanément PyQt5 et PySide6 au hasard dans le Python de Probe Basic. Pour un environnement PySide6 autonome et isolé seulement :
 
@@ -211,7 +232,7 @@ Cette variante hérite de `ProbeBasic` et ajoute explicitement OpenMill au `tabW
 
 1. Sous Windows : `python -m openmill.integration.check --smoke-test`.
 2. Exécuter la suite `python -m unittest discover -s tests -v`.
-3. Sur Debian : vérifier `openmill-probe-check --json --smoke-test`.
+3. Sur Debian : vérifier `python3 -m openmill.integration.check --json --smoke-test`.
 4. Démarrer une configuration LinuxCNC simulée avec l’onglet utilisateur.
 5. Ajouter une opération simple, charger le programme et vérifier le backplot Probe Basic.
 6. Contrôler l’origine active, le brut, le numéro d’outil et le sens de broche.

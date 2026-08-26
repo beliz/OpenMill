@@ -28,6 +28,7 @@ CATEGORY_COLORS = {
     "Préparation": "#57d7a8",
     "Poches": "#62c6ff",
     "Profils": "#b69cff",
+    "Rainures": "#ff8fa3",
     "Perçage": "#ffbf69",
 }
 
@@ -72,7 +73,7 @@ def draw_operation_diagram(painter: QPainter, bounds: QRectF, plugin_id: str, ac
         painter.setBrush(bright)
         painter.drawEllipse(QPointF(right, plate.top() + 11), 4.5, 4.5)
 
-    elif plugin_id == "pocket_rectangle":
+    elif plugin_id in {"pocket_rectangle", "profile_rectangle"}:
         for index in range(4):
             inset = 11 + index * min(plate.width(), plate.height()) * 0.085
             ring = plate.adjusted(inset, inset * 0.72, -inset, -inset * 0.72)
@@ -82,7 +83,7 @@ def draw_operation_diagram(painter: QPainter, bounds: QRectF, plugin_id: str, ac
             painter.setBrush(Qt.NoBrush)
             painter.drawRoundedRect(ring, max(2, 9 - index * 2), max(2, 9 - index * 2))
 
-    elif plugin_id == "pocket_circle":
+    elif plugin_id in {"pocket_circle", "profile_circle"}:
         radius = min(plate.width(), plate.height()) * 0.35
         for index in range(5):
             ring = radius * (1 - index * 0.19)
@@ -90,22 +91,35 @@ def draw_operation_diagram(painter: QPainter, bounds: QRectF, plugin_id: str, ac
             painter.setBrush(Qt.NoBrush)
             painter.drawEllipse(center, ring, ring)
 
-    elif plugin_id == "hexagon":
+    elif plugin_id in {"hexagon", "profile_polygon"}:
         radius = min(plate.width(), plate.height()) * 0.36
+        sides = 5 if plugin_id == "profile_polygon" else 6
         for index in range(3):
             size = radius * (1 - index * 0.23)
             polygon = QPolygonF(
                 [
                     QPointF(
-                        center.x() + size * math.cos(math.radians(30 + vertex * 60)),
-                        center.y() + size * math.sin(math.radians(30 + vertex * 60)),
+                        center.x() + size * math.cos(math.radians(30 + vertex * 360 / sides)),
+                        center.y() + size * math.sin(math.radians(30 + vertex * 360 / sides)),
                     )
-                    for vertex in range(6)
+                    for vertex in range(sides)
                 ]
             )
             _line(painter, bright if index == 0 else muted, 2 if index == 0 else 1.3)
             painter.setBrush(Qt.NoBrush)
             painter.drawPolygon(polygon)
+
+    elif plugin_id == "slot_straight":
+        slot = plate.adjusted(16, plate.height() * 0.27, -16, -plate.height() * 0.27)
+        radius = slot.height() / 2
+        for index in range(3):
+            inset = index * radius * 0.28
+            current = slot.adjusted(inset, inset, -inset, -inset)
+            if current.height() <= 1:
+                break
+            _line(painter, bright if index == 0 else muted, 2 if index == 0 else 1.3)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(current, current.height() / 2, current.height() / 2)
 
     elif plugin_id == "drill_circle":
         radius = min(plate.width(), plate.height()) * 0.31

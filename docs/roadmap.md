@@ -16,10 +16,13 @@
 ## Phase 2 — stratégies d’usinage robustes
 
 - [ ] Rampes et entrées hélicoïdales.
-- [ ] Passe de finition et surépaisseur.
-- [ ] Sens avalant / opposition.
-- [ ] Rainures, oblongs, lamages et chanfreins.
-- [ ] Contours libres, polygones et gravure simple.
+- [x] Moteur partagé de surépaisseur et passe de finition pour les profils.
+- [x] Sens avalant / opposition pour les profils et rainures modernes.
+- [x] Contours rectangulaire, circulaire et polygonal intérieur/extérieur/sur tracé.
+- [x] Rainure droite et oblongue orientable.
+- [ ] Étendre finition et sens de coupe aux poches historiques.
+- [ ] Rainures radiales/circulaires, lamages et chanfreins.
+- [ ] Contours libres et gravure simple.
 - [ ] Arcs `G2/G3` et réduction du nombre de segments.
 - [ ] Cycles de perçage LinuxCNC lorsque pertinents.
 - [ ] Bibliothèque matières, outils et recommandations d’avance.
@@ -35,9 +38,10 @@
 
 ## Phase 4 — LinuxCNC et Probe Basic
 
-- [ ] Validation du widget dans Probe Basic simulé.
-- [ ] Chargement du `.ngc` dans LinuxCNC.
-- [ ] Lecture des outils et offsets actifs en direct.
+- [x] Validation automatisée du parcours Probe Basic simulé.
+- [x] Chargement sécurisé du `.ngc` dans LinuxCNC / Probe Basic.
+- [x] Lecture de la table d’outils LinuxCNC réelle.
 - [ ] Compatibilité VTK Debian / LinuxCNC mesurée.
-- [ ] Synchronisation optionnelle avec le backplot Probe Basic.
-- [ ] Documentation d’installation et proposition upstream.
+- [x] Synchronisation optionnelle avec le backplot Probe Basic.
+- [x] Documentation et installateur réversible sans modification upstream.
+- [ ] Validation sur plusieurs versions réelles de Probe Basic et proposition upstream.

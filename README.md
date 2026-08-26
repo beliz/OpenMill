@@ -2,7 +2,7 @@
 
 Atelier conversationnel de fraisage CNC, pensé pour être développé sous **Windows**, utilisé avec **LinuxCNC**, puis intégré proprement dans **Probe Basic / QtPyVCP**.
 
-**Version 0.4.8 — colorateur QtPyVCP rendu non réentrant.**
+**Version 0.5.0 — premiers profils universels, rainure droite et installateur Probe Basic.**
 
 L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d’usinage, les opérations, les aperçus et la connexion machine sont séparés. Le même `QWidget` peut fonctionner comme application autonome ou devenir un onglet d’une interface LinuxCNC.
 
@@ -14,6 +14,10 @@ L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d�
 - Poche rectangulaire avec angles rayonnés et compensation du diamètre.
 - Poche circulaire par contours concentriques.
 - Hexagone intérieur ou extérieur avec cote sur plats et orientation.
+- Profils rectangulaire, circulaire et polygonal de 3 à 24 côtés.
+- Contournage intérieur, extérieur ou sur tracé, en avalant ou en opposition.
+- Surépaisseur latérale et passe de finition indépendante.
+- Rainure droite/oblongue orientable avec ébauche et finition.
 - Réseau circulaire de perçages, cercle complet ou secteur angulaire.
 - Réseau rectangulaire de perçages, orientable et parcouru en zigzag.
 - Perçage avec débourrage optionnel.
@@ -95,6 +99,111 @@ python -m pip install -e .
 
 Le lanceur autonome utilise volontairement une machine simulée. Le widget d’intégration utilise l’adaptateur LinuxCNC réel ; voir [docs/integration-probe-basic.md](docs/integration-probe-basic.md).
 
+## Installer OpenMill dans un Probe Basic existant
+
+### Installation automatique — recommandée
+
+Cloner le dépôt directement sur la machine LinuxCNC, puis lancer l’installateur avec le fichier INI de la machine :
+
+```bash
+cd ~/linuxcnc
+git clone https://github.com/beliz/OpenMill.git
+cd OpenMill
+chmod +x installation.sh
+./installation.sh --ini ~/linuxcnc/configs/ma-machine/ma-machine.ini
+```
+
+Le script :
+
+1. vérifie le dépôt, le Python choisi et la section `[DISPLAY]` du fichier INI ;
+2. relie `src/openmill` au Python utilisateur avec un fichier `.pth`, sans `pip`, sans `sudo` et sans contourner PEP 668 ;
+3. conserve un éventuel `USER_TABS_PATH` existant ou ajoute proprement `USER_TABS_PATH = user_tabs/` dans `[DISPLAY]` ;
+4. sauvegarde le fichier INI avant toute modification ;
+5. copie `openmill.py` et `openmill.ui` dans le dossier d’onglets de la configuration ;
+6. vérifie l’import Python et exécute une génération/charge simulée complète.
+
+Si plusieurs configurations sont détectées, le script propose une liste. Le chemin peut aussi être donné sous forme de dossier :
+
+```bash
+./installation.sh --config-dir ~/linuxcnc/configs/ma-machine
+```
+
+Diagnostic sans modification :
+
+```bash
+./installation.sh check --ini ~/linuxcnc/configs/ma-machine/ma-machine.ini
+```
+
+Désinstallation :
+
+```bash
+./installation.sh uninstall --ini ~/linuxcnc/configs/ma-machine/ma-machine.ini
+```
+
+La désinstallation retire uniquement les fichiers marqués comme gérés par OpenMill et le bloc INI ajouté par le script. Elle conserve les sauvegardes et refuse d’effacer un onglet utilisateur non identifié.
+
+Pour mettre ensuite le dépôt et l’intégration à jour :
+
+```bash
+cd ~/linuxcnc/OpenMill
+git pull
+./installation.sh --ini ~/linuxcnc/configs/ma-machine/ma-machine.ini
+```
+
+L’installation est idempotente : cette dernière commande peut être rejouée après chaque mise à jour.
+
+### Installation manuelle
+
+Depuis le dépôt OpenMill, créer dans le dossier Python utilisateur un fichier `openmill-conversational.pth` contenant le chemin absolu de `src` :
+
+```bash
+OPENMILL_SRC="$(pwd)/src"
+PYTHON_USER_SITE="$(python3 -m site --user-site)"
+mkdir -p "$PYTHON_USER_SITE"
+printf '%s\n' "$OPENMILL_SRC" > "$PYTHON_USER_SITE/openmill-conversational.pth"
+```
+
+Exemple de contenu du fichier `.pth` :
+
+```text
+/home/apa/linuxcnc/OpenMill/src
+```
+
+Dans le fichier INI de la configuration LinuxCNC, ajouter :
+
+```ini
+[DISPLAY]
+USER_TABS_PATH = user_tabs/
+```
+
+Ne pas ajouter de commentaire après la valeur. Copier ensuite le dossier fourni :
+
+```bash
+mkdir -p ~/linuxcnc/configs/ma-machine/user_tabs
+cp -R examples/probe_basic/user_tabs/openmill \
+      ~/linuxcnc/configs/ma-machine/user_tabs/
+```
+
+La structure obtenue doit être :
+
+```text
+ma-machine/
+├── ma-machine.ini
+└── user_tabs/
+    └── openmill/
+        ├── openmill.py
+        └── openmill.ui
+```
+
+Vérifier enfin l’intégration avant de redémarrer Probe Basic :
+
+```bash
+python3 -c "import openmill; print(openmill.__version__)"
+python3 -m openmill.integration.check --smoke-test
+```
+
+Un onglet **CONVERSATIONNEL** doit apparaître au prochain démarrage. La méthode automatique et la procédure manuelle ne modifient aucun fichier source de Probe Basic.
+
 ## Tester l’intégration Probe Basic dès maintenant
 
 Sous Windows, après le premier lancement :
@@ -106,12 +215,18 @@ Sous Windows, après le premier lancement :
 Sous Linux, après installation du paquet :
 
 ```bash
-openmill-probe-check --json --smoke-test
+python3 -m openmill.integration.check --json --smoke-test
 ```
 
 Le test construit une pièce, génère son G-code et la charge dans un Probe Basic simulé. Aucun LinuxCNC, Qt ou VTK n’est nécessaire.
 
-Pour l’intégration réelle, copier `examples/probe_basic/user_tabs/openmill/` dans le dossier `user_tabs/` de la configuration machine et déclarer :
+Pour l’intégration réelle, la commande recommandée est désormais :
+
+```bash
+./installation.sh --ini /chemin/vers/configuration-machine/machine.ini
+```
+
+L’équivalent manuel consiste à copier `examples/probe_basic/user_tabs/openmill/` dans le dossier `user_tabs/` de la configuration machine et déclarer :
 
 ```ini
 [DISPLAY]
@@ -144,7 +259,7 @@ flowchart TD
 src/openmill/
 ├── adapters/      interface machine, simulation, LinuxCNC
 ├── core/          modèles, géométrie, registre, moteur, G-code, projets
-├── operations/    surfaçage, poches, hexagones, réseaux de perçage
+├── operations/    surfaçage, poches, profils, rainures et réseaux de perçage
 ├── ui/            formulaire, aperçu vectoriel, VTK, atelier Qt
 └── integration/   onglet Probe Basic, pont machine sécurisé, diagnostic
 ```
@@ -230,7 +345,8 @@ Voir [CONTRIBUTING.md](CONTRIBUTING.md) et [docs/roadmap.md](docs/roadmap.md).
 - Les collisions avec brides, porte-outil et machine ne sont pas simulées.
 - La trajectoire utilise actuellement des segments `G1`, pas d’arcs `G2/G3` ni de cycles LinuxCNC dédiés.
 - Le pont Probe Basic est testé en simulation ; son interface graphique doit encore être validée sur une installation LinuxCNC effective.
-- Les stratégies d’entrée hélicoïdale, rampes, finition, bridage et postprocesseurs enrichis restent à développer.
+- Les entrées hélicoïdales, rampes, bridages et postprocesseurs enrichis restent à développer.
+- La finition est disponible sur les nouveaux profils et la rainure droite, mais pas encore sur les anciennes poches.
 
 ## Licence
 

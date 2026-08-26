@@ -4,6 +4,7 @@ import math
 import unittest
 
 from openmill.core.geometry import (
+    capsule_points,
     circle_points,
     depth_levels,
     linear_positions,
@@ -14,6 +15,17 @@ from openmill.core.geometry import (
 
 
 class GeometryTests(unittest.TestCase):
+    def test_capsule_respects_total_dimensions(self) -> None:
+        points = capsule_points(10, 20, straight_length=30, radius=5)
+        self.assertAlmostEqual(max(x for x, _y in points) - min(x for x, _y in points), 40)
+        self.assertAlmostEqual(max(y for _x, y in points) - min(y for _x, y in points), 10)
+        self.assertEqual(points[0], points[-1])
+
+    def test_rotated_capsule_swaps_its_extents(self) -> None:
+        points = capsule_points(0, 0, straight_length=30, radius=5, rotation_degrees=90)
+        self.assertAlmostEqual(max(x for x, _y in points) - min(x for x, _y in points), 10)
+        self.assertAlmostEqual(max(y for _x, y in points) - min(y for _x, y in points), 40)
+
     def test_depth_levels_include_exact_final_depth(self) -> None:
         self.assertEqual(depth_levels(0, -5, 2), [-2, -4, -5])
 

@@ -21,7 +21,18 @@ class OperationTests(unittest.TestCase):
 
     def test_all_expected_operations_are_registered(self) -> None:
         registered = {plugin.id for plugin in registry.all()}
-        expected = {"facing", "pocket_rectangle", "pocket_circle", "hexagon", "drill_circle", "drill_grid"}
+        expected = {
+            "facing",
+            "pocket_rectangle",
+            "pocket_circle",
+            "hexagon",
+            "drill_circle",
+            "drill_grid",
+            "profile_rectangle",
+            "profile_circle",
+            "profile_polygon",
+            "slot_straight",
+        }
         self.assertTrue(expected.issubset(registered))
 
     def test_facing_extends_beyond_stock_edges(self) -> None:
@@ -71,6 +82,106 @@ class OperationTests(unittest.TestCase):
         first_interior = next(motion for motion in interior.motions if motion.kind is MotionKind.PLUNGE)
         first_exterior = next(motion for motion in exterior.motions if motion.kind is MotionKind.PLUNGE)
         self.assertGreater(first_exterior.end.x, first_interior.end.x)
+
+    def test_rectangle_profile_compensates_inside_and_outside(self) -> None:
+        inside = self.make_path(
+            "profile_rectangle",
+            center_x=50,
+            center_y=40,
+            width=40,
+            height=30,
+            corner_radius=0,
+            mode="inside",
+            side_allowance=0,
+        )
+        outside = self.make_path(
+            "profile_rectangle",
+            center_x=50,
+            center_y=40,
+            width=40,
+            height=30,
+            corner_radius=0,
+            mode="outside",
+            side_allowance=0,
+        )
+        inside_x = [
+            motion.end.x for motion in inside.motions if motion.kind is MotionKind.CUT
+        ]
+        outside_x = [
+            motion.end.x for motion in outside.motions if motion.kind is MotionKind.CUT
+        ]
+        self.assertAlmostEqual(min(inside_x), 30 + inside.tool.diameter / 2)
+        self.assertAlmostEqual(max(inside_x), 70 - inside.tool.diameter / 2)
+        self.assertAlmostEqual(min(outside_x), 30 - outside.tool.diameter / 2)
+        self.assertAlmostEqual(max(outside_x), 70 + outside.tool.diameter / 2)
+
+    def test_circle_profile_finish_pass_reaches_exact_compensation(self) -> None:
+        path = self.make_path(
+            "profile_circle",
+            center_x=0,
+            center_y=0,
+            diameter=40,
+            mode="outside",
+            side_allowance=0.4,
+            finish_pass="enabled",
+        )
+        radii = [
+            math.hypot(motion.end.x, motion.end.y)
+            for motion in path.motions
+            if motion.kind is MotionKind.CUT
+        ]
+        self.assertAlmostEqual(min(radii), 20 + path.tool.diameter / 2)
+        self.assertAlmostEqual(max(radii), 20 + path.tool.diameter / 2 + 0.4)
+
+    def test_profile_on_the_line_ignores_compensation_and_allowance(self) -> None:
+        path = self.make_path(
+            "profile_circle",
+            center_x=0,
+            center_y=0,
+            diameter=40,
+            mode="on",
+            side_allowance=0.4,
+        )
+        radii = [
+            math.hypot(motion.end.x, motion.end.y)
+            for motion in path.motions
+            if motion.kind is MotionKind.CUT
+        ]
+        self.assertTrue(radii)
+        self.assertTrue(all(math.isclose(radius, 20, abs_tol=1e-6) for radius in radii))
+
+    def test_polygon_profile_accepts_variable_side_count(self) -> None:
+        path = self.make_path(
+            "profile_polygon",
+            sides=8,
+            across_flats=40,
+            mode="outside",
+            side_allowance=0,
+        )
+        cuts = [motion for motion in path.motions if motion.kind is MotionKind.CUT]
+        self.assertGreaterEqual(len(cuts), 8)
+
+    def test_straight_slot_respects_requested_outer_dimensions(self) -> None:
+        path = self.make_path(
+            "slot_straight",
+            center_x=0,
+            center_y=0,
+            length=50,
+            width=16,
+            rotation=0,
+            side_allowance=0,
+        )
+        cuts = [motion.end for motion in path.motions if motion.kind is MotionKind.CUT]
+        self.assertAlmostEqual(max(point.x for point in cuts) + path.tool.diameter / 2, 25)
+        self.assertAlmostEqual(min(point.x for point in cuts) - path.tool.diameter / 2, -25)
+        self.assertAlmostEqual(max(point.y for point in cuts) + path.tool.diameter / 2, 8)
+        self.assertAlmostEqual(min(point.y for point in cuts) - path.tool.diameter / 2, -8)
+
+    def test_straight_slot_rejects_impossible_dimensions(self) -> None:
+        with self.assertRaises(ValueError):
+            self.make_path("slot_straight", length=10, width=12)
+        with self.assertRaises(ValueError):
+            self.make_path("slot_straight", length=20, width=4)
 
     def test_circular_drilling_creates_exactly_requested_holes(self) -> None:
         path = self.make_path("drill_circle", tool=5, hole_count=9)

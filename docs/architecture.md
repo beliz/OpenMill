@@ -26,6 +26,20 @@ Les paramètres communs — profondeurs, sécurité, avances et broche — sont 
 
 Une opération doit lever `ValueError` si sa géométrie est impossible. Le moteur isole cette erreur, continue de calculer les autres opérations et l’interface interdit l’export tant qu’une opération activée reste invalide.
 
+## Géométrie et stratégie réutilisables
+
+Les nouvelles opérations ne doivent pas dupliquer leur logique de compensation. Le module `operations.profiles` centralise désormais :
+
+- la position intérieur / sur tracé / extérieur ;
+- la compensation du rayon d’outil ;
+- le sens avalant / opposition ;
+- la surépaisseur d’ébauche ;
+- la passe latérale de finition.
+
+Les profils rectangle, cercle et polygone fournissent seulement une fabrique de contour compensé à ce moteur. La rainure utilise la même convention de sens et de finition avec une géométrie capsule dédiée dans `core.geometry`.
+
+À terme, la même séparation doit permettre de combiner quatre familles indépendantes : géométrie, stratégie d’usinage, placement/répétition et technologie de coupe. Les anciens identifiants de poche et d’hexagone sont conservés pour ne pas casser les projets JSON existants pendant cette migration.
+
 ## Modèle de trajectoire
 
 Les mouvements décrivent le **centre de l’outil**, avec position initiale, position finale, type et avance :
@@ -79,3 +93,5 @@ L’installation de l’extension suffit pour ajouter l’opération au formulai
 Un dépôt distinct permet des releases, des tests Windows, des prototypes d’interface et des évolutions rapides sans modifier Probe Basic. Le point de contact upstream reste petit : `OpenMillConversationalWidget` et `LinuxCNCMachineAdapter`.
 
 Lorsque l’intégration sera suffisamment mûre, deux stratégies resteront possibles : conserver un paquet optionnel ou proposer les composants génériques au projet Probe Basic / QtPyVCP. Cette architecture ne verrouille pas ce choix.
+
+Le script `installation.sh` respecte cette frontière : il ne modifie aucun fichier Probe Basic. Il expose le dépôt au Python utilisateur, déploie uniquement les deux fichiers conventionnels de l’onglet et ajoute un bloc identifié dans l’INI. La désinstallation peut donc retirer exclusivement ce qu’OpenMill a créé.

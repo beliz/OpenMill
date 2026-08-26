@@ -28,3 +28,17 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Vérifier le pont Probe Basic simulé
         run: openmill-probe-check --json --smoke-test
+      - name: Tester l'installateur Probe Basic réversible
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          INSTALL_TEST_DIR="$(mktemp -d)"
+          mkdir -p "$INSTALL_TEST_DIR/config" "$INSTALL_TEST_DIR/userbase"
+          cp tests/fixtures/probe_basic.ini "$INSTALL_TEST_DIR/config/machine.ini"
+          PYTHONUSERBASE="$INSTALL_TEST_DIR/userbase" ./installation.sh install --ini "$INSTALL_TEST_DIR/config/machine.ini"
+          PYTHONUSERBASE="$INSTALL_TEST_DIR/userbase" ./installation.sh install --ini "$INSTALL_TEST_DIR/config/machine.ini"
+          test "$(grep -c 'BEGIN OPENMILL USER TAB' "$INSTALL_TEST_DIR/config/machine.ini")" -eq 1
+          PYTHONUSERBASE="$INSTALL_TEST_DIR/userbase" ./installation.sh check --ini "$INSTALL_TEST_DIR/config/machine.ini"
+          PYTHONUSERBASE="$INSTALL_TEST_DIR/userbase" ./installation.sh uninstall --ini "$INSTALL_TEST_DIR/config/machine.ini"
+          test ! -e "$INSTALL_TEST_DIR/config/user_tabs/openmill/openmill.py"
+          test ! -e "$INSTALL_TEST_DIR/userbase/lib/python${{ matrix.python }}/site-packages/openmill-conversational.pth"
