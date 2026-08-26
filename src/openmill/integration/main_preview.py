@@ -116,6 +116,12 @@ class ProbeBasicPreviewController:
         self._editor = None
         self._parsed: ParsedGcode | None = None
         self._current_signature: tuple[str, int, int] | None = None
+        self._pending_editor_line: int | None = None
+        self._last_preview_motion_count: int | None = None
+        self._editor_timer = QTimer(owner)
+        self._editor_timer.setSingleShot(True)
+        self._editor_timer.setInterval(75)
+        self._editor_timer.timeout.connect(self._apply_pending_editor_line)
         self._timer = QTimer(owner)
         self._timer.setInterval(750)
         self._timer.timeout.connect(self.refresh_loaded_program)
@@ -153,7 +159,12 @@ class ProbeBasicPreviewController:
     def _connect_gcode_editor(self, window) -> None:
         self._editor = window.findChild(QWidget, "gcodetextedit")
         self._style_gcode_editor()
-        signal = getattr(self._editor, "cursorPositionChanged", None) if self._editor is not None else None
+        # GcodeTextEdit emits focusLine only after its own ExtraSelection has
+        # highlighted the row. It is more reliable than observing the raw Qt
+        # cursor signal and also follows LinuxCNC's live motion line.
+        signal = getattr(self._editor, "focusLine", None) if self._editor is not None else None
+        if signal is None and self._editor is not None:
+            signal = getattr(self._editor, "cursorPositionChanged", None)
         if signal is not None:
             signal.connect(self._editor_cursor_changed)
 
@@ -172,45 +183,74 @@ QWidget#gcodetextedit {{
 }}
 """
             )
-        # GcodeTextEdit exposes these Qt Designer properties. Probe Basic's
-        # default current-line background is almost white and clashes with the
-        # modern light text, so use a dark high-contrast line instead.
+        # These are Qt properties, not setCurrentLineBackground-style methods.
+        # setProperty invokes the Python Property setter used by GcodeTextEdit.
+        current_line = self._editor.textCursor().blockNumber() + 1
         colors = {
-            "setCurrentLineBackground": "#17372f",
-            "setMarginCurrentLineBackground": "#23604c",
-            "setMarginCurrentLineColor": "#ffffff",
+            "currentLineBackground": "#17372f",
+            "marginCurrentLineBackground": "#23604c",
+            "marginCurrentLineColor": "#ffffff",
         }
-        for setter_name, color in colors.items():
-            setter = getattr(self._editor, setter_name, None)
-            if callable(setter):
-                setter(QColor(color))
+        for property_name, color in colors.items():
+            self._editor.setProperty(property_name, QColor(color))
+        setter = getattr(self._editor, "setCurrentLine", None)
+        if callable(setter):
+            setter(current_line)
+        else:
+            viewport = getattr(self._editor, "viewport", lambda: None)()
+            if viewport is not None:
+                viewport.update()
 
-    def _editor_cursor_changed(self) -> None:
+    def _editor_cursor_changed(self, line: int | None = None, *_args) -> None:
         if self._editor is None or self.host is None or self._parsed is None:
             return
-        line = self._editor.textCursor().blockNumber() + 1
-        motion_count = self._parsed.line_motion_counts.get(line, 0)
-        self.host.set_motion_index(motion_count)
+        if not isinstance(line, int) or isinstance(line, bool):
+            line = self._editor.textCursor().blockNumber() + 1
+        self._pending_editor_line = max(1, line)
+        # Moving quickly through a large file used to rebuild the complete VTK
+        # scene once per cursor event. Coalesce the burst into one render.
+        self._editor_timer.start()
+
+    def _apply_pending_editor_line(self) -> None:
+        if self.host is None or self._parsed is None or self._pending_editor_line is None:
+            return
+        line = self._pending_editor_line
+        self._pending_editor_line = None
+        motion_counts = self._parsed.line_motion_counts
+        motion_count = motion_counts.get(line)
+        if motion_count is None:
+            preceding = (source_line for source_line in motion_counts if source_line <= line)
+            nearest = max(preceding, default=None)
+            motion_count = motion_counts.get(nearest, 0)
+        if motion_count != self._last_preview_motion_count:
+            self.host.set_motion_index(motion_count)
+            self._last_preview_motion_count = motion_count
         self.host.show_openmill()
         if self._status is not None:
-            total = max(self._parsed.line_motion_counts, default=0)
+            total = max(motion_counts, default=0)
             self._status.setText(f"Ligne {line}/{total}")
 
     def _move_editor_line(self, direction: int) -> None:
         if self._editor is None:
             return
-        cursor = self._editor.textCursor()
-        cursor.clearSelection()
-        cursor.movePosition(QTextCursor.StartOfBlock)
-        operation = QTextCursor.Down if direction > 0 else QTextCursor.Up
-        if not cursor.movePosition(operation):
+        current = self._editor.textCursor().blockNumber() + 1
+        document = self._editor.document()
+        target = max(1, min(document.blockCount(), current + (1 if direction > 0 else -1)))
+        if target == current:
             return
-        cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
-        self._editor.setTextCursor(cursor)
+        setter = getattr(self._editor, "setCurrentLine", None)
+        if callable(setter):
+            setter(target)
+        else:
+            cursor = QTextCursor(document.findBlockByLineNumber(target - 1))
+            self._editor.setTextCursor(cursor)
         if hasattr(self._editor, "ensureCursorVisible"):
             self._editor.ensureCursorVisible()
         if hasattr(self._editor, "setFocus"):
             self._editor.setFocus()
+        # Queue explicitly as a compatibility fallback for older QtPyVCP
+        # versions that do not expose GcodeTextEdit.focusLine.
+        self._editor_cursor_changed(target)
 
     @staticmethod
     def _compact_main_layout(window) -> None:
@@ -234,10 +274,12 @@ QWidget#gcodetextedit {{
         except OSError:
             self._current_signature = None
         self.host.set_content(project, result, source=f"OpenMill · {path.name}")
+        self._last_preview_motion_count = None
         try:
             self._parsed = parse_gcode_file(path, tool_lookup=self.adapter.get_tool)
         except (OSError, TypeError, ValueError):
             self._parsed = None
+        self._editor_cursor_changed()
         if self._status is not None:
             self._status.setText(f"OpenMill · {path.name}")
         select_probe_basic_main(self.owner)
@@ -267,7 +309,9 @@ QWidget#gcodetextedit {{
                 self._status.setText(f"Aperçu impossible · {error}")
             return
         self._parsed = parsed
+        self._last_preview_motion_count = None
         warning = f" · {len(parsed.warnings)} avertissement(s)" if parsed.warnings else ""
         self.host.set_content(parsed.project, parsed.result, source=f"G-code · {path.name}{warning}")
+        self._editor_cursor_changed()
         if self._status is not None:
             self._status.setText(f"G-code · {path.name}{warning}")

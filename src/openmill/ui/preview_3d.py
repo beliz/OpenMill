@@ -293,18 +293,21 @@ class VtkPreview(QWidget):
         active_uid = self._selected_uid
         if self._animation.isActive() and frame.active_operation_uid is not None:
             active_uid = frame.active_operation_uid
-        self._compatible.set_content(
-            self._project,
-            frame.result,
-            selected_uid=active_uid,
-            tool_position=frame.tool_position,
-            color_mode=self._palette.currentData() or "operation",
-        )
         if self._requested_mode == "vtk" and self._vtk_ready:
             try:
                 self._render_vtk_frame(frame, active_uid)
             except Exception as error:
                 self._vtk_failed(error)
+        else:
+            # Rendering both engines for every animation frame doubled the UI
+            # thread workload even though only one preview can be visible.
+            self._compatible.set_content(
+                self._project,
+                frame.result,
+                selected_uid=active_uid,
+                tool_position=frame.tool_position,
+                color_mode=self._palette.currentData() or "operation",
+            )
 
     def _actor(self, source, color: str, *, opacity: float = 1.0):
         vtk = self._vtk

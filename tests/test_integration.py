@@ -25,6 +25,7 @@ from openmill.integration.bridge import (
     project_filename,
 )
 from openmill.integration.check import main as check_main
+from openmill.integration.qtpyvcp_compat import silence_gcode_properties_debug_output
 from openmill.integration.runtime import binding_candidates, inspect_runtime, program_directory
 
 
@@ -308,9 +309,50 @@ class IntegrationPackageTests(unittest.TestCase):
         source_text = (
             self.root / "src/openmill/integration/main_preview.py"
         ).read_text(encoding="utf-8")
-        self.assertIn("QTextCursor.EndOfBlock, QTextCursor.KeepAnchor", source_text)
-        self.assertIn('"setCurrentLineBackground": "#17372f"', source_text)
+        self.assertIn('"currentLineBackground": "#17372f"', source_text)
+        self.assertIn("self._editor.setProperty(property_name, QColor(color))", source_text)
+        self.assertIn('getattr(self._editor, "focusLine", None)', source_text)
+        self.assertIn("setter(target)", source_text)
         self.assertIn("selection-color: #ffffff", source_text)
+
+    def test_gcode_cursor_updates_are_debounced(self) -> None:
+        source_text = (
+            self.root / "src/openmill/integration/main_preview.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("self._editor_timer.setSingleShot(True)", source_text)
+        self.assertIn("self._editor_timer.setInterval(75)", source_text)
+        self.assertIn("self._editor_timer.start()", source_text)
+        self.assertIn("motion_count != self._last_preview_motion_count", source_text)
+
+    def test_preview_renders_only_the_visible_engine(self) -> None:
+        source = ast.parse((self.root / "src/openmill/ui/preview_3d.py").read_text(encoding="utf-8"))
+        preview = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == "VtkPreview")
+        apply_frame = next(
+            node for node in preview.body if isinstance(node, ast.FunctionDef) and node.name == "_apply_frame"
+        )
+        renderer_branch = next(
+            node
+            for node in ast.walk(apply_frame)
+            if isinstance(node, ast.If)
+            and "self._requested_mode == 'vtk' and self._vtk_ready" in ast.unparse(node.test)
+        )
+        self.assertTrue(renderer_branch.orelse)
+        self.assertIn("self._compatible.set_content", ast.unparse(renderer_branch.orelse))
+
+    def test_known_qtpyvcp_extent_debug_prints_are_silenced(self) -> None:
+        def noisy_extent_parser(sj):
+            print(len(sj))
+            print(sj)
+
+        module = SimpleNamespace(
+            PropertiesCanon=SimpleNamespace(rs274_calc_extents=noisy_extent_parser)
+        )
+        with patch(
+            "openmill.integration.qtpyvcp_compat.importlib.import_module", return_value=module
+        ):
+            self.assertTrue(silence_gcode_properties_debug_output())
+            self.assertTrue(module._openmill_debug_output_silenced)
+            self.assertIsNone(module.print("ignored"))
 
 
 if __name__ == "__main__":

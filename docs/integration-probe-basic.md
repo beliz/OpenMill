@@ -1,6 +1,6 @@
 # Intégrer OpenMill dans Probe Basic
 
-OpenMill 0.4.2 s’intègre comme **onglet utilisateur**, sans modifier le dépôt Probe Basic et sans faire de fork. La même extension fonctionne en simulation et sur une installation LinuxCNC réelle.
+OpenMill 0.4.3 s’intègre comme **onglet utilisateur**, sans modifier le dépôt Probe Basic et sans faire de fork. La même extension fonctionne en simulation et sur une installation LinuxCNC réelle.
 
 > Le chargement du programme et le départ cycle sont volontairement séparés. OpenMill ne démarre jamais une broche, un déplacement ou un programme.
 
@@ -159,7 +159,9 @@ Le programme publié est volontairement limité à l’ASCII 7 bits et utilise d
 
 Après chargement, OpenMill sélectionne automatiquement l’onglet `MAIN` et son aperçu animé. Le BackPlot Probe Basic d’origine reste accessible avec le bouton **Probe Basic**. Lorsqu’il est affiché, un bouton flottant **OpenMill** permet de revenir à l’aperçu moderne. Les deux moteurs occupent alternativement le même emplacement : OpenMill ne déplace, ne recrée et ne redimensionne pas le widget VTK natif.
 
-Dans l’éditeur G-code de `MAIN`, cliquer sur une ligne positionne la chronologie OpenMill après les mouvements exécutés jusqu’à cette ligne. Les boutons **Ligne précédente** et **Ligne suivante** au-dessus de l’aperçu sélectionnent toute la ligne correspondante, la maintiennent visible et déplacent simultanément la scène 3D. La ligne courante utilise un fond sombre contrasté afin de préserver la lisibilité de la coloration syntaxique Probe Basic. Cette navigation est visuelle uniquement : elle ne change pas la ligne d’exécution LinuxCNC et ne commande aucun mouvement machine.
+Dans l’éditeur G-code de `MAIN`, cliquer sur une ligne positionne la chronologie OpenMill après les mouvements exécutés jusqu’à cette ligne. Les boutons **Ligne précédente** et **Ligne suivante** au-dessus de l’aperçu déplacent la ligne courante, la maintiennent visible et mettent simultanément à jour la scène 3D. OpenMill utilise la sélection de ligne native de `GcodeTextEdit`, avec un fond sombre contrasté qui préserve la lisibilité de la coloration syntaxique Probe Basic. Les événements rapprochés sont regroupés pendant 75 ms afin qu’un déplacement rapide dans un gros programme ne reconstruise pas plusieurs fois la scène VTK. Cette navigation est visuelle uniquement : elle ne change pas la ligne d’exécution LinuxCNC et ne commande aucun mouvement machine.
+
+Certaines versions de QtPyVCP contiennent également deux impressions de diagnostic accidentelles dans le calcul des limites G-code. Elles produisent dans le terminal une paire `longueur + coordonnées` pour chaque segment et peuvent ralentir fortement le chargement d’un grand fichier. OpenMill désactive uniquement ces deux impressions lorsqu’il détecte exactement la version de code concernée ; les journaux QtPyVCP normaux restent actifs.
 
 ## 7. Aperçu des programmes externes
 

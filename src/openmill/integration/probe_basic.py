@@ -7,6 +7,7 @@ from openmill.adapters.mock import MockMachineAdapter
 from openmill.core.models import Project
 from openmill.integration.bridge import LinuxCNCProgramBridge, ProgramBridge, SimulatedProgramBridge
 from openmill.integration.main_preview import ProbeBasicPreviewController
+from openmill.integration.qtpyvcp_compat import silence_gcode_properties_debug_output
 from openmill.integration.theme import (
     install_probe_basic_theme,
     probe_basic_theme_active,
@@ -40,6 +41,7 @@ class OpenMillConversationalWidget(ConversationalWorkbench):
         )
         self.setObjectName("CONVERSATIONNEL")
         self.setProperty("sidebar", False)
+        silence_gcode_properties_debug_output()
         if global_theme:
             install_probe_basic_theme()
         self._theme_button = QPushButton()

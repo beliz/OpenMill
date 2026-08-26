@@ -2,7 +2,7 @@
 
 Atelier conversationnel de fraisage CNC, pensé pour être développé sous **Windows**, utilisé avec **LinuxCNC**, puis intégré proprement dans **Probe Basic / QtPyVCP**.
 
-**Version 0.4.2 — bascule d’aperçu persistante et sélection G-code bidirectionnelle.**
+**Version 0.4.3 — synchronisation G-code fiable et aperçu plus fluide dans Probe Basic.**
 
 L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d’usinage, les opérations, les aperçus et la connexion machine sont séparés. Le même `QWidget` peut fonctionner comme application autonome ou devenir un onglet d’une interface LinuxCNC.
 
@@ -35,8 +35,10 @@ L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d�
 - Aperçu OpenMill animé directement dans `MAIN`, en alternative au BackPlot Probe Basic.
 - Sélection d’une ligne G-code synchronisée avec la progression de l’aperçu OpenMill.
 - Navigation tactile ligne précédente/suivante depuis la barre de l’aperçu.
-- Ligne G-code courante sélectionnée et maintenue visible par la navigation de l’aperçu.
+- Ligne G-code courante surlignée et maintenue visible par la navigation de l’aperçu.
 - Surbrillance G-code sombre et contrastée, compatible avec les couleurs de syntaxe Probe Basic.
+- Synchronisation G-code/aperçu temporisée pour éviter les reconstructions VTK en rafale.
+- Un seul moteur d’aperçu calculé à la fois et sortie de diagnostic QtPyVCP parasite neutralisée.
 - Bouton flottant **OpenMill** toujours accessible sur le BackPlot VTK natif.
 - BackPlot VTK natif conservé à sa position d’origine et affiché en alternance avec OpenMill.
 - Import visuel des programmes externes : G0/G1/G2/G3, arcs IJK/R, G17/G18/G19, G20/G21 et G90/G91.
