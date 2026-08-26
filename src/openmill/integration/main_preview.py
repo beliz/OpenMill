@@ -17,6 +17,23 @@ from openmill.ui.qt_widgets import QHBoxLayout, QLabel, QPushButton, QTextEdit, 
 from openmill.ui.theme import STYLESHEET
 
 
+_DARK_SYNTAX_COLORS = {
+    "#0f0f0f": "#d6e4f0",  # numbers
+    "#800000": "#ff8a80",  # maroon
+    "#808000": "#d8d46a",  # olive
+    "#008000": "#57d7a8",  # green
+    "#800080": "#d291ff",  # purple
+    "#a52a2a": "#ff967d",  # brown
+    "#008080": "#4dd8d8",  # teal
+    "#0000ff": "#7aa7ff",  # blue
+    "#000080": "#91b4ff",  # navy
+    "#808080": "#aab8c8",  # gray
+    "#006400": "#72d49b",  # dark green
+    "#76af00": "#9bd35a",  # X axis
+    "#0080c0": "#57bde9",  # Y axis
+}
+
+
 def select_probe_basic_main(source_widget) -> bool:
     window = source_widget.window()
     tabs = window.findChild(QWidget, "tabWidget")
@@ -119,6 +136,7 @@ class ProbeBasicPreviewController:
         self._current_signature: tuple[str, int, int] | None = None
         self._pending_editor_line: int | None = None
         self._last_preview_motion_count: int | None = None
+        self._styled_highlighter = None
         self._editor_timer = QTimer(owner)
         self._editor_timer.setSingleShot(True)
         self._editor_timer.setInterval(75)
@@ -184,6 +202,8 @@ class ProbeBasicPreviewController:
 {marker}
 QWidget#gcodetextedit,
 QWidget#gcodetextedit_2 {{
+    color: #dce7f5;
+    background-color: #0d1522;
     selection-background-color: #23604c;
     selection-color: #ffffff;
 }}
@@ -220,6 +240,7 @@ QWidget#gcodetextedit_2 {{
         if current is not None:
             try:
                 if current.document() is self._editor.document():
+                    self._apply_dark_syntax_palette()
                     return True
             except (AttributeError, RuntimeError):
                 pass
@@ -231,6 +252,28 @@ QWidget#gcodetextedit_2 {{
             )
         except (AttributeError, ImportError, OSError, RuntimeError, TypeError, ValueError):
             return False
+        self._apply_dark_syntax_palette()
+        return True
+
+    def _apply_dark_syntax_palette(self) -> bool:
+        """Replace QtPyVCP's light-theme token colors with readable variants."""
+        if self._editor is None:
+            return False
+        highlighter = getattr(self._editor, "gCodeHighlighter", None)
+        if highlighter is None:
+            return False
+        if highlighter is self._styled_highlighter:
+            return True
+        try:
+            for _pattern, text_format in highlighter.rules:
+                source = text_format.foreground().color().name().lower()
+                replacement = _DARK_SYNTAX_COLORS.get(source)
+                if replacement is not None:
+                    text_format.setForeground(QColor(replacement))
+            highlighter.rehighlight()
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            return False
+        self._styled_highlighter = highlighter
         return True
 
     def _highlight_editor_line(self, line: int) -> None:
@@ -281,6 +324,7 @@ QWidget#gcodetextedit_2 {{
         if motion_count != self._last_preview_motion_count:
             self.host.set_motion_index(motion_count)
             self._last_preview_motion_count = motion_count
+        self._apply_dark_syntax_palette()
         self._highlight_editor_line(line)
         self.host.show_openmill()
         if self._status is not None:

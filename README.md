@@ -2,7 +2,7 @@
 
 Atelier conversationnel de fraisage CNC, pensé pour être développé sous **Windows**, utilisé avec **LinuxCNC**, puis intégré proprement dans **Probe Basic / QtPyVCP**.
 
-**Version 0.4.6 — synchronisation G-code bidirectionnelle et coloration permanente.**
+**Version 0.4.7 — coloration syntaxique lisible sur le thème sombre.**
 
 L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d’usinage, les opérations, les aperçus et la connexion machine sont séparés. Le même `QWidget` peut fonctionner comme application autonome ou devenir un onglet d’une interface LinuxCNC.
 
@@ -36,6 +36,7 @@ L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d�
 - Sélection d’une ligne G-code synchronisée avec la progression de l’aperçu OpenMill.
 - Clic dans l’éditeur `MAIN` relié directement à la position de l’aperçu.
 - Coloration syntaxique QtPyVCP activée au démarrage et après chaque rechargement.
+- Palette syntaxique adaptée au fond sombre, y compris nombres et codes historiquement noirs.
 - Navigation tactile ligne précédente/suivante depuis la barre de l’aperçu.
 - Ligne G-code courante surlignée et maintenue visible par la navigation de l’aperçu.
 - Surbrillance G-code sombre et contrastée, compatible avec les couleurs de syntaxe Probe Basic.
