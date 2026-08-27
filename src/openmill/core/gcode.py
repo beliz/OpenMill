@@ -45,11 +45,17 @@ def generate_gcode(project: Project, paths: list[Toolpath]) -> str:
     current_feed: float | None = None
     for index, path in enumerate(paths, 1):
         lines.extend(("", f"(OPERATION {index} - {_comment(path.operation_title)})"))
+        if path.instance_count > 1:
+            placement = path.placement_summary.replace("·", "-").replace("×", "x")
+            lines.append(
+                f"(MOTIF - {_comment(placement)} - {path.instance_count} appels)"
+            )
         if current_tool != path.tool.number:
             lines.extend((f"T{path.tool.number} M6", f"G43 H{path.tool.number}"))
             current_tool = path.tool.number
             current_feed = None
-        lines.append(f"S{path.spindle_rpm} M3")
+        spindle_command = "M4" if path.spindle_direction == "counterclockwise" else "M3"
+        lines.append(f"S{path.spindle_rpm} {spindle_command}")
 
         if path.motions:
             lines.append(f"G0 Z{_number(path.motions[0].start.z)}")
@@ -58,6 +64,20 @@ def generate_gcode(project: Project, paths: list[Toolpath]) -> str:
                     f"G0 X{_number(path.motions[0].start.x)} Y{_number(path.motions[0].start.y)}"
                 )
         for motion_index, motion in enumerate(path.motions):
+            if motion.kind is MotionKind.DWELL:
+                lines.append(f"G4 P{_number(motion.dwell_seconds or 0.0)}")
+                continue
+            if motion.kind is MotionKind.TAP:
+                if motion.thread_pitch is None or motion.thread_pitch <= 0:
+                    raise ValueError("Un taraudage rigide nécessite un pas positif.")
+                lines.append(
+                    f"G33.1 Z{_number(motion.end.z)} K{_number(motion.thread_pitch)}"
+                )
+                current_feed = None
+                continue
+            if motion.kind is MotionKind.TAP_RETURN:
+                # LinuxCNC G33.1 already includes the synchronized return move.
+                continue
             command = "G0" if motion.kind is MotionKind.RAPID else "G1"
             components = [command]
             if motion_index == 0 or abs(motion.end.x - motion.start.x) > 1e-9:

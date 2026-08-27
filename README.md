@@ -2,7 +2,7 @@
 
 Atelier conversationnel de fraisage CNC, pensé pour être développé sous **Windows**, utilisé avec **LinuxCNC**, puis intégré proprement dans **Probe Basic / QtPyVCP**.
 
-**Version 0.5.1 — splash OpenMill moderne et installation Probe Basic réversible.**
+**Version 0.6.0 — cycles conversationnels et motifs de répétition inspirés des commandes Heidenhain.**
 
 L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d’usinage, les opérations, les aperçus et la connexion machine sont séparés. Le même `QWidget` peut fonctionner comme application autonome ou devenir un onglet d’une interface LinuxCNC.
 
@@ -18,9 +18,11 @@ L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d�
 - Contournage intérieur, extérieur ou sur tracé, en avalant ou en opposition.
 - Surépaisseur latérale et passe de finition indépendante.
 - Rainure droite/oblongue orientable avec ébauche et finition.
-- Réseau circulaire de perçages, cercle complet ou secteur angulaire.
-- Réseau rectangulaire de perçages, orientable et parcouru en zigzag.
-- Perçage avec débourrage optionnel.
+- Cycles séparés de perçage simple, profond avec débourrage, avec pause/lamage et alésage.
+- Taraudage rigide LinuxCNC `G33.1`, à droite ou à gauche, avec contrôle explicite du pas.
+- Placement indépendant du cycle : position unique, ligne, grille orientable en zigzag ou motif polaire.
+- Répétition applicable à toutes les géométries, avec rotation optionnelle du cycle sur le motif.
+- Motif visible dans la liste des étapes, conservé dans le projet JSON et documenté dans le G-code.
 - Brut rectangulaire configurable, origine au coin ou au centre.
 - Aperçus interactifs dessus `XY`, face `XZ`, côté `YZ`.
 - Aperçu 3D VTK avec brut translucide et rendu compatible sans OpenGL si le pilote graphique est capricieux.
@@ -99,6 +101,17 @@ python -m pip install -e .
 ```
 
 Le lanceur autonome utilise volontairement une machine simulée. Le widget d’intégration utilise l’adaptateur LinuxCNC réel ; voir [docs/integration-probe-basic.md](docs/integration-probe-basic.md).
+
+## Programmer un cycle et ses répétitions
+
+OpenMill sépare maintenant le travail à effectuer de l’endroit où il doit être exécuté :
+
+1. ajouter une étape et choisir le cycle ou la géométrie ;
+2. régler l’outil, les profondeurs et les paramètres de coupe ;
+3. ouvrir **Placement / répétition** ou cliquer sur **Répéter l’étape** ;
+4. choisir **Unique**, **Ligne**, **Grille** ou **Cercle**.
+
+Une seule étape reste affichée dans le programme. L’aperçu, le temps estimé et le G-code contiennent toutes ses occurrences. La grille peut être parcourue en zigzag pour réduire les rapides ; une rainure ou un profil peut aussi tourner avec une grille orientée ou un motif polaire.
 
 ## Installer OpenMill dans un Probe Basic existant
 
@@ -272,7 +285,7 @@ flowchart TD
 src/openmill/
 ├── adapters/      interface machine, simulation, LinuxCNC
 ├── core/          modèles, géométrie, registre, moteur, G-code, projets
-├── operations/    surfaçage, poches, profils, rainures et réseaux de perçage
+├── operations/    surfaçage, poches, profils, rainures et cycles de perçage
 ├── ui/            formulaire, aperçu vectoriel, VTK, atelier Qt
 └── integration/   onglet Probe Basic, pont machine sécurisé, diagnostic
 ```
@@ -356,7 +369,7 @@ Voir [CONTRIBUTING.md](CONTRIBUTING.md) et [docs/roadmap.md](docs/roadmap.md).
 
 - L’aperçu affiche les volumes parcourus ; il ne soustrait pas encore réellement la matière du brut.
 - Les collisions avec brides, porte-outil et machine ne sont pas simulées.
-- La trajectoire utilise actuellement des segments `G1`, pas d’arcs `G2/G3` ni de cycles LinuxCNC dédiés.
+- Les fraisages utilisent encore principalement des segments `G1` plutôt que des arcs `G2/G3`. Le taraudage rigide utilise déjà `G33.1` ; les autres cycles de trou restent développés en mouvements explicites pour conserver un aperçu identique au programme exporté.
 - Le pont Probe Basic est testé en simulation ; son interface graphique doit encore être validée sur une installation LinuxCNC effective.
 - Les entrées hélicoïdales, rampes, bridages et postprocesseurs enrichis restent à développer.
 - La finition est disponible sur les nouveaux profils et la rainure droite, mais pas encore sur les anciennes poches.

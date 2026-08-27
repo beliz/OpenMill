@@ -38,7 +38,9 @@ Les nouvelles opérations ne doivent pas dupliquer leur logique de compensation.
 
 Les profils rectangle, cercle et polygone fournissent seulement une fabrique de contour compensé à ce moteur. La rainure utilise la même convention de sens et de finition avec une géométrie capsule dédiée dans `core.geometry`.
 
-À terme, la même séparation doit permettre de combiner quatre familles indépendantes : géométrie, stratégie d’usinage, placement/répétition et technologie de coupe. Les anciens identifiants de poche et d’hexagone sont conservés pour ne pas casser les projets JSON existants pendant cette migration.
+Cette séparation combine désormais une géométrie et sa stratégie d’usinage avec une définition de placement indépendante. Une même opération peut être appelée une fois, en ligne, sur une grille cartésienne orientée ou sur un motif polaire. Les anciens réseaux de perçage restent lisibles dans les projets existants, mais le catalogue propose désormais des cycles de trou séparés de leur motif, dans l’esprit `CYCL DEF` puis `PATTERN DEF` d’une commande conversationnelle.
+
+Le module `core.placement` calcule les positions absolues, transforme les trajectoires et insère les liaisons entre occurrences. Ces liaisons remontent systématiquement à la hauteur de sécurité avant tout déplacement latéral. Le moteur de validation, les aperçus, le temps estimé et le générateur G-code consomment ensuite la même trajectoire développée.
 
 ## Modèle de trajectoire
 
@@ -47,6 +49,8 @@ Les mouvements décrivent le **centre de l’outil**, avec position initiale, po
 - `RAPID` : déplacement rapide, représenté en pointillés en 2D ;
 - `PLUNGE` : plongée avec avance Z ;
 - `CUT` : déplacement d’usinage avec avance XY.
+- `DWELL` : temporisation au fond d’un cycle ;
+- `TAP` / `TAP_RETURN` : descente et retour synchronisés d’un taraudage rigide LinuxCNC.
 
 Les aperçus élargissent les mouvements avec le diamètre réel de l’outil. La sécurité de repli est centralisée dans `ToolpathBuilder`.
 
@@ -73,7 +77,7 @@ Les règles de sélection et les incréments sont testés dans le noyau Python, 
 
 ## Projet et compatibilité
 
-Le projet JSON contient un `schema_version`, le brut, l’origine, l’ordre des opérations et leurs paramètres. Les identifiants d’opération ne doivent jamais changer silencieusement : toute évolution incompatible nécessite une migration explicite.
+Le projet JSON contient un `schema_version`, le brut, l’origine, l’ordre des opérations, leurs paramètres et leur placement. Les fichiers antérieurs sans bloc `placement` restent chargés comme des opérations à position unique. Les identifiants d’opération ne doivent jamais changer silencieusement : toute évolution incompatible nécessite une migration explicite.
 
 Le générateur `.ngc` ajoute aussi un commentaire JSON `OPENMILL_STOCK`. Une future intégration Probe Basic pourra récupérer ces dimensions pour initialiser son propre aperçu de brut.
 

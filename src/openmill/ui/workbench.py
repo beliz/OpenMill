@@ -32,7 +32,7 @@ from openmill.adapters.base import MachineAdapter
 from openmill.adapters.mock import MockMachineAdapter
 from openmill.core.engine import BuildResult, build_project, create_demo_project
 from openmill.core.gcode import generate_gcode
-from openmill.core.models import OperationRecord, OriginMode, Project
+from openmill.core.models import OperationRecord, OriginMode, PlacementMode, Project
 from openmill.core.project_io import load_project, save_project
 from openmill.core.registry import registry
 from openmill.integration.bridge import ProgramBridge, ProgramLoadError, prepare_and_load_program
@@ -199,6 +199,13 @@ class ConversationalWorkbench(QWidget):
         add.clicked.connect(self.show_operation_picker)
         layout.addWidget(add)
 
+        repeat = QPushButton("↻  Répéter l’étape")
+        repeat.setObjectName("repeatOperation")
+        repeat.setMinimumHeight(36)
+        repeat.setToolTip("Appliquer une ligne, une grille ou un motif circulaire au cycle sélectionné.")
+        repeat.clicked.connect(self.repeat_selected)
+        layout.addWidget(repeat)
+
         buttons = QHBoxLayout()
         duplicate = QPushButton("Dupliquer")
         duplicate.clicked.connect(self.duplicate_selected)
@@ -322,7 +329,7 @@ class ConversationalWorkbench(QWidget):
         self._operations_list.clear()
         selected_row = 0
         for index, operation in enumerate(self._project.operations):
-            item = QListWidgetItem(f"{operation.title}\nT{operation.tool_number}")
+            item = QListWidgetItem(self._operation_item_text(operation))
             item.setData(Qt.UserRole, operation.uid)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled)
             item.setCheckState(Qt.Checked if operation.enabled else Qt.Unchecked)
@@ -333,6 +340,11 @@ class ConversationalWorkbench(QWidget):
             self._operations_list.setCurrentRow(selected_row)
         self._operations_list.blockSignals(False)
         self._form.set_operation(self._selected_operation())
+
+    @staticmethod
+    def _operation_item_text(operation: OperationRecord) -> str:
+        placement = "Unique" if operation.placement.mode is PlacementMode.SINGLE else operation.placement.summary
+        return f"{operation.title}\nT{operation.tool_number}  ·  {placement}"
 
     def _selected_operation(self) -> OperationRecord | None:
         item = self._operations_list.currentItem()
@@ -404,7 +416,7 @@ class ConversationalWorkbench(QWidget):
         item = self._operations_list.currentItem()
         if operation is not None and item is not None:
             self._operations_list.blockSignals(True)
-            item.setText(f"{operation.title}\nT{operation.tool_number}")
+            item.setText(self._operation_item_text(operation))
             self._operations_list.blockSignals(False)
         self._schedule_refresh()
 
@@ -432,6 +444,16 @@ class ConversationalWorkbench(QWidget):
         self._project.operations.insert(self._project.operations.index(current) + 1, duplicate)
         self._populate_operations(duplicate.uid)
         self._schedule_refresh()
+
+    def repeat_selected(self) -> None:
+        current = self._selected_operation()
+        if current is None:
+            return
+        if current.placement.mode is PlacementMode.SINGLE:
+            current.placement.mode = PlacementMode.LINEAR
+        self._form.set_operation(current)
+        self._form.focus_placement()
+        self._selected_operation_changed()
 
     def remove_selected(self) -> None:
         current = self._selected_operation()

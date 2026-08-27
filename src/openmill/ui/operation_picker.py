@@ -30,6 +30,7 @@ CATEGORY_COLORS = {
     "Profils": "#b69cff",
     "Rainures": "#ff8fa3",
     "Perçage": "#ffbf69",
+    "Cycles de perçage": "#ffbf69",
 }
 
 
@@ -120,6 +121,42 @@ def draw_operation_diagram(painter: QPainter, bounds: QRectF, plugin_id: str, ac
             _line(painter, bright if index == 0 else muted, 2 if index == 0 else 1.3)
             painter.setBrush(Qt.NoBrush)
             painter.drawRoundedRect(current, current.height() / 2, current.height() / 2)
+
+    elif plugin_id in {"drill_single", "drill_peck", "drill_dwell", "ream", "tap_rigid"}:
+        radius = min(plate.width(), plate.height()) * 0.22
+        painter.setBrush(QColor(11, 16, 26, 235))
+        painter.setPen(QPen(bright, 2.0))
+        painter.drawEllipse(center, radius, radius)
+        painter.setPen(QPen(muted, 1.2))
+        painter.drawEllipse(center, radius * 0.48, radius * 0.48)
+        _line(painter, muted, 1.1, dashed=True)
+        painter.drawLine(QPointF(center.x(), plate.top() + 7), QPointF(center.x(), plate.bottom() - 7))
+        painter.drawLine(QPointF(plate.left() + 28, center.y()), QPointF(plate.right() - 28, center.y()))
+        if plugin_id == "drill_peck":
+            _line(painter, bright, 2.0)
+            for offset in (-12, 0, 12):
+                painter.drawLine(
+                    QPointF(center.x() - 26, center.y() + offset),
+                    QPointF(center.x() - 9, center.y() + offset),
+                )
+        elif plugin_id == "drill_dwell":
+            painter.setPen(QPen(bright, 2.2))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawArc(
+                QRectF(center.x() - 12, center.y() - 12, 24, 24),
+                35 * 16,
+                285 * 16,
+            )
+        elif plugin_id == "ream":
+            painter.setPen(QPen(bright, 2.0))
+            painter.drawEllipse(center, radius * 0.72, radius * 0.72)
+        elif plugin_id == "tap_rigid":
+            _line(painter, bright, 1.8)
+            for offset in (-12, -4, 4, 12):
+                painter.drawLine(
+                    QPointF(center.x() - 18, center.y() + offset + 5),
+                    QPointF(center.x() + 18, center.y() + offset - 5),
+                )
 
     elif plugin_id == "drill_circle":
         radius = min(plate.width(), plate.height()) * 0.31
@@ -312,10 +349,13 @@ class OperationPickerDialog(QDialog):
             matching = [
                 plugin
                 for plugin in plugins
-                if not search
-                or search in plugin.label.casefold()
-                or search in plugin.description.casefold()
-                or search in category.casefold()
+                if plugin.picker_visible
+                and (
+                    not search
+                    or search in plugin.label.casefold()
+                    or search in plugin.description.casefold()
+                    or search in category.casefold()
+                )
             ]
             if not matching:
                 continue

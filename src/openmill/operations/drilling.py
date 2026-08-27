@@ -39,6 +39,7 @@ class CircularDrillPatternOperation(OperationPlugin):
     label = "Perçages sur cercle"
     category = "Perçage"
     description = "Répartition angulaire régulière sur un cercle primitif."
+    picker_visible = False
     fields = (
         FieldSpec("center_x", "Centre X", 60.0),
         FieldSpec("center_y", "Centre Y", 40.0),
@@ -77,6 +78,7 @@ class RectangularDrillPatternOperation(OperationPlugin):
     label = "Perçages en grille"
     category = "Perçage"
     description = "Réseau rectangulaire centré, orientable et en zigzag."
+    picker_visible = False
     fields = (
         FieldSpec("center_x", "Centre X", 60.0),
         FieldSpec("center_y", "Centre Y", 40.0),

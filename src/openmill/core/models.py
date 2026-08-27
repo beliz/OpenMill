@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from enum import Enum
 import math
 from typing import Any
@@ -18,6 +18,18 @@ class MotionKind(str, Enum):
     RAPID = "rapid"
     CUT = "cut"
     PLUNGE = "plunge"
+    DWELL = "dwell"
+    TAP = "tap"
+    TAP_RETURN = "tap_return"
+
+
+class PlacementMode(str, Enum):
+    """How one conversational cycle is called on the workpiece."""
+
+    SINGLE = "single"
+    LINEAR = "linear"
+    GRID = "grid"
+    POLAR = "polar"
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,12 +101,64 @@ class Stock:
         return (self.y_min + self.y_max) / 2
 
 
+@dataclass(slots=True)
+class Placement:
+    """Placement/pattern definition kept independent from machining geometry.
+
+    The vocabulary deliberately follows conversational controls: a machining
+    cycle is defined once, then called at one point or on a Cartesian/polar
+    pattern.  All coordinates are absolute in the active work offset.
+    """
+
+    mode: PlacementMode = PlacementMode.SINGLE
+    start_x: float = 0.0
+    start_y: float = 0.0
+    count: int = 2
+    step_x: float = 20.0
+    step_y: float = 0.0
+    columns: int = 2
+    rows: int = 2
+    spacing_x: float = 20.0
+    spacing_y: float = 20.0
+    grid_angle: float = 0.0
+    serpentine: bool = True
+    center_x: float = 0.0
+    center_y: float = 0.0
+    diameter: float = 60.0
+    start_angle: float = 0.0
+    sweep: float = 360.0
+    rotate_geometry: bool = False
+
+    def __post_init__(self) -> None:
+        self.mode = PlacementMode(self.mode)
+
+    @property
+    def instance_count(self) -> int:
+        if self.mode is PlacementMode.SINGLE:
+            return 1
+        if self.mode in {PlacementMode.LINEAR, PlacementMode.POLAR}:
+            return max(0, int(self.count))
+        return max(0, int(self.columns)) * max(0, int(self.rows))
+
+    @property
+    def summary(self) -> str:
+        if self.mode is PlacementMode.SINGLE:
+            return "Position unique"
+        if self.mode is PlacementMode.LINEAR:
+            return f"Ligne · {self.count} positions"
+        if self.mode is PlacementMode.GRID:
+            return f"Grille · {self.columns} × {self.rows}"
+        return f"Cercle · {self.count} positions"
+
+
 @dataclass(frozen=True, slots=True)
 class Motion:
     start: Point
     end: Point
     kind: MotionKind
     feed: float | None = None
+    dwell_seconds: float | None = None
+    thread_pitch: float | None = None
 
     @property
     def length(self) -> float:
@@ -107,8 +171,13 @@ class OperationRecord:
     title: str
     tool_number: int = 1
     parameters: dict[str, Any] = field(default_factory=dict)
+    placement: Placement = field(default_factory=Placement)
     enabled: bool = True
     uid: str = field(default_factory=lambda: uuid4().hex)
+
+    def __post_init__(self) -> None:
+        if isinstance(self.placement, dict):
+            self.placement = Placement(**self.placement)
 
     def clone(self) -> OperationRecord:
         return OperationRecord(
@@ -116,6 +185,7 @@ class OperationRecord:
             title=f"{self.title} — copie",
             tool_number=self.tool_number,
             parameters=dict(self.parameters),
+            placement=replace(self.placement),
             enabled=self.enabled,
         )
 
@@ -128,6 +198,9 @@ class Toolpath:
     motions: list[Motion] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     spindle_rpm: int = 12_000
+    spindle_direction: str = "clockwise"
+    instance_count: int = 1
+    placement_summary: str = "Position unique"
 
     @property
     def cutting_length(self) -> float:
@@ -139,7 +212,10 @@ class Toolpath:
 
     def estimated_minutes(self, rapid_feed: float = 3_000.0) -> float:
         return sum(
-            motion.length / (rapid_feed if motion.kind is MotionKind.RAPID else motion.feed or 300.0)
+            (motion.dwell_seconds or 0.0) / 60
+            if motion.kind is MotionKind.DWELL
+            else motion.length
+            / (rapid_feed if motion.kind is MotionKind.RAPID else motion.feed or 300.0)
             for motion in self.motions
         )
 
@@ -155,6 +231,8 @@ class Project:
     def to_dict(self) -> dict[str, Any]:
         result = asdict(self)
         result["stock"]["origin"] = self.stock.origin.value
+        for operation in result["operations"]:
+            operation["placement"]["mode"] = PlacementMode(operation["placement"]["mode"]).value
         return result
 
     @classmethod
@@ -169,4 +247,3 @@ class Project:
             work_offset=payload.get("work_offset", "G54"),
             schema_version=version,
         )
-

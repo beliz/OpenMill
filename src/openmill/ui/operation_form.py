@@ -15,10 +15,87 @@ from openmill.ui.qt_widgets import (
 )
 
 from openmill.adapters.base import MachineAdapter
-from openmill.core.models import OperationRecord
+from openmill.core.models import OperationRecord, PlacementMode
 from openmill.core.parameter_controls import uses_angle_dial, uses_percentage_slider
 from openmill.core.registry import FieldSpec, registry
 from openmill.ui.parameter_controls import AngleControl, PercentageControl, SegmentedChoice, TouchNumberControl
+
+
+PLACEMENT_MODE = FieldSpec(
+    "mode",
+    "Mode d’appel",
+    PlacementMode.SINGLE.value,
+    unit="",
+    kind="choice",
+    choices=(
+        (PlacementMode.SINGLE.value, "Unique"),
+        (PlacementMode.LINEAR.value, "Ligne"),
+        (PlacementMode.GRID.value, "Grille"),
+        (PlacementMode.POLAR.value, "Cercle"),
+    ),
+    tip="Définis le cycle une fois, puis choisis où il doit être exécuté.",
+)
+
+LINEAR_PLACEMENT_FIELDS = (
+    FieldSpec("start_x", "Première position X", 0.0),
+    FieldSpec("start_y", "Première position Y", 0.0),
+    FieldSpec("count", "Nombre de positions", 2, unit="", minimum=1, maximum=9999, kind="int"),
+    FieldSpec("step_x", "Incrément X", 20.0),
+    FieldSpec("step_y", "Incrément Y", 0.0),
+    FieldSpec(
+        "rotate_geometry",
+        "Orienter le cycle dans le sens de la ligne",
+        "disabled",
+        unit="",
+        kind="choice",
+        choices=(("disabled", "Non"), ("enabled", "Oui")),
+    ),
+)
+
+GRID_PLACEMENT_FIELDS = (
+    FieldSpec("start_x", "Première position X", 0.0),
+    FieldSpec("start_y", "Première position Y", 0.0),
+    FieldSpec("columns", "Colonnes", 2, unit="", minimum=1, maximum=999, kind="int"),
+    FieldSpec("rows", "Rangées", 2, unit="", minimum=1, maximum=999, kind="int"),
+    FieldSpec("spacing_x", "Pas entre colonnes", 20.0),
+    FieldSpec("spacing_y", "Pas entre rangées", 20.0),
+    FieldSpec("grid_angle", "Orientation de la grille", 0.0, unit="°", minimum=-360, maximum=360),
+    FieldSpec(
+        "serpentine",
+        "Ordre en zigzag",
+        "enabled",
+        unit="",
+        kind="choice",
+        choices=(("enabled", "Oui"), ("disabled", "Non")),
+        tip="Évite un retour rapide inutile au début de chaque rangée.",
+    ),
+    FieldSpec(
+        "rotate_geometry",
+        "Orienter aussi le cycle",
+        "disabled",
+        unit="",
+        kind="choice",
+        choices=(("disabled", "Non"), ("enabled", "Oui")),
+    ),
+)
+
+POLAR_PLACEMENT_FIELDS = (
+    FieldSpec("center_x", "Centre du motif X", 0.0),
+    FieldSpec("center_y", "Centre du motif Y", 0.0),
+    FieldSpec("diameter", "Diamètre de répartition", 60.0, minimum=0),
+    FieldSpec("count", "Nombre de positions", 6, unit="", minimum=1, maximum=9999, kind="int"),
+    FieldSpec("start_angle", "Angle de départ", 0.0, unit="°", minimum=-360, maximum=360),
+    FieldSpec("sweep", "Angle de répartition", 360.0, unit="°", minimum=-360, maximum=360),
+    FieldSpec(
+        "rotate_geometry",
+        "Tourner le cycle avec le motif",
+        "disabled",
+        unit="",
+        kind="choice",
+        choices=(("disabled", "Non"), ("enabled", "Oui")),
+        tip="Utile pour orienter une rainure ou un profil dans le sens radial.",
+    ),
+)
 
 
 class OperationForm(QWidget):
@@ -88,8 +165,41 @@ class OperationForm(QWidget):
                 section.setObjectName("section")
                 self._form.addWidget(section)
             self._add_parameter(specification.label, self._create_field(specification, operation), specification.tip)
+        self._add_placement_editor(operation)
         self._form.addStretch()
         self._loading = False
+
+    def focus_placement(self) -> None:
+        self._scroll.verticalScrollBar().setValue(self._scroll.verticalScrollBar().maximum())
+
+    def _add_placement_editor(self, operation: OperationRecord) -> None:
+        section = QLabel("PLACEMENT / RÉPÉTITION")
+        section.setObjectName("section")
+        self._form.addWidget(section)
+        summary = QLabel(
+            "Comme sur une commande conversationnelle : le cycle reste unique, "
+            "puis OpenMill l’appelle sur le motif choisi."
+        )
+        summary.setWordWrap(True)
+        summary.setObjectName("muted")
+        self._form.addWidget(summary)
+        self._add_parameter(
+            PLACEMENT_MODE.label,
+            self._create_placement_field(PLACEMENT_MODE, operation),
+            PLACEMENT_MODE.tip,
+        )
+        fields = {
+            PlacementMode.SINGLE: (),
+            PlacementMode.LINEAR: LINEAR_PLACEMENT_FIELDS,
+            PlacementMode.GRID: GRID_PLACEMENT_FIELDS,
+            PlacementMode.POLAR: POLAR_PLACEMENT_FIELDS,
+        }[operation.placement.mode]
+        for specification in fields:
+            self._add_parameter(
+                specification.label,
+                self._create_placement_field(specification, operation),
+                specification.tip,
+            )
 
     def _add_parameter(self, label: str, control: QWidget, tip: str = "") -> None:
         card = QFrame()
@@ -108,6 +218,25 @@ class OperationForm(QWidget):
 
     def _create_field(self, specification: FieldSpec, operation: OperationRecord) -> QWidget:
         value = operation.parameters.get(specification.key, specification.default)
+        return self._create_control(
+            specification,
+            value,
+            lambda current, key=specification.key: self._parameter_changed(key, current),
+        )
+
+    def _create_placement_field(self, specification: FieldSpec, operation: OperationRecord) -> QWidget:
+        value = getattr(operation.placement, specification.key)
+        if specification.key in {"serpentine", "rotate_geometry"}:
+            value = "enabled" if value else "disabled"
+        if specification.key == "mode":
+            value = value.value
+        return self._create_control(
+            specification,
+            value,
+            lambda current, key=specification.key: self._placement_changed(key, current),
+        )
+
+    def _create_control(self, specification: FieldSpec, value, callback) -> QWidget:
         if specification.kind == "choice":
             field = SegmentedChoice(specification, value)
         elif uses_angle_dial(specification):
@@ -116,7 +245,7 @@ class OperationForm(QWidget):
             field = PercentageControl(specification, float(value))
         else:
             field = TouchNumberControl(specification, value)
-        field.value_changed.connect(lambda current, key=specification.key: self._parameter_changed(key, current))
+        field.value_changed.connect(callback)
         if specification.tip:
             field.setToolTip(specification.tip)
         return field
@@ -135,3 +264,20 @@ class OperationForm(QWidget):
         if self._operation is not None and not self._loading:
             self._operation.parameters[key] = value
             self.operation_changed.emit()
+
+    def _placement_changed(self, key: str, value) -> None:
+        if self._operation is None or self._loading:
+            return
+        if key == "mode":
+            self._operation.placement.mode = PlacementMode(value)
+        elif key in {"serpentine", "rotate_geometry"}:
+            setattr(self._operation.placement, key, value == "enabled")
+        elif key in {"count", "columns", "rows"}:
+            setattr(self._operation.placement, key, int(value))
+        else:
+            setattr(self._operation.placement, key, float(value))
+        operation = self._operation
+        if key == "mode":
+            self.set_operation(operation)
+            self.focus_placement()
+        self.operation_changed.emit()

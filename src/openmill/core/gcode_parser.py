@@ -198,6 +198,7 @@ def parse_gcode(
             line_motion_counts[line_number] = motion_count
             continue
         g_codes = [value for letter, value in tokens if letter == "G"]
+        rigid_tapping = any(math.isclose(code, 33.1, abs_tol=1e-9) for code in g_codes)
         for code in g_codes:
             normalized = f"G{code:g}"
             if normalized in {"G0", "G1", "G2", "G3"}:
@@ -232,7 +233,34 @@ def parse_gcode(
                 target_values[axis] = coordinates[axis] if absolute else current[axis] + coordinates[axis]
         target = _point(target_values)
         path = path_for_tool()
-        if motion_mode in {"G2", "G3"}:
+        if rigid_tapping:
+            pitch = coordinates.get("K")
+            if pitch is None or pitch <= 0:
+                warnings.append(
+                    f"Ligne {line_number} : taraudage G33.1 sans pas K positif."
+                )
+                pitch = 1.0
+            tapping_feed = spindle * pitch if spindle > 0 else feed
+            path.motions.append(
+                Motion(
+                    position,
+                    target,
+                    MotionKind.TAP,
+                    tapping_feed,
+                    thread_pitch=pitch,
+                )
+            )
+            path.motions.append(
+                Motion(
+                    target,
+                    position,
+                    MotionKind.TAP_RETURN,
+                    tapping_feed,
+                    thread_pitch=pitch,
+                )
+            )
+            motion_count += 2
+        elif motion_mode in {"G2", "G3"}:
             try:
                 points = _arc_points(position, target, coordinates, plane=plane, clockwise=motion_mode == "G2")
             except ValueError as error:

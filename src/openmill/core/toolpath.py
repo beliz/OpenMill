@@ -39,6 +39,7 @@ class ToolpathBuilder:
         y: float | None = None,
         z: float | None = None,
         kind: MotionKind,
+        feed: float | None = None,
     ) -> None:
         target = Point(
             self.position.x if x is None else float(x),
@@ -47,8 +48,14 @@ class ToolpathBuilder:
         )
         if target.distance_to(self.position) <= 1e-9:
             return
-        feed = None if kind is MotionKind.RAPID else self.feed_z if kind is MotionKind.PLUNGE else self.feed_xy
-        self.result.motions.append(Motion(self.position, target, kind, feed))
+        default_feed = (
+            None
+            if kind in {MotionKind.RAPID, MotionKind.DWELL}
+            else self.feed_z
+            if kind in {MotionKind.PLUNGE, MotionKind.TAP, MotionKind.TAP_RETURN}
+            else self.feed_xy
+        )
+        self.result.motions.append(Motion(self.position, target, kind, default_feed if feed is None else feed))
         self.position = target
 
     def rapid(self, x: float, y: float, z: float | None = None) -> None:
@@ -62,10 +69,52 @@ class ToolpathBuilder:
     def cut(self, x: float, y: float, z: float | None = None) -> None:
         self.move(x=x, y=y, z=z, kind=MotionKind.CUT)
 
+    def feed_to_z(self, z: float, feed: float) -> None:
+        if feed <= 0:
+            raise ValueError("L’avance doit être supérieure à zéro.")
+        self.move(z=z, kind=MotionKind.PLUNGE, feed=feed)
+
+    def dwell(self, seconds: float) -> None:
+        if seconds < 0:
+            raise ValueError("La temporisation ne peut pas être négative.")
+        if seconds > 0:
+            self.result.motions.append(
+                Motion(
+                    self.position,
+                    self.position,
+                    MotionKind.DWELL,
+                    dwell_seconds=float(seconds),
+                )
+            )
+
+    def tap(self, z: float, pitch: float, spindle_rpm: int) -> None:
+        if pitch <= 0:
+            raise ValueError("Le pas de taraudage doit être supérieur à zéro.")
+        target = Point(self.position.x, self.position.y, float(z))
+        start = self.position
+        self.result.motions.append(
+            Motion(
+                start,
+                target,
+                MotionKind.TAP,
+                feed=float(pitch) * int(spindle_rpm),
+                thread_pitch=float(pitch),
+            )
+        )
+        self.result.motions.append(
+            Motion(
+                target,
+                start,
+                MotionKind.TAP_RETURN,
+                feed=float(pitch) * int(spindle_rpm),
+                thread_pitch=float(pitch),
+            )
+        )
+        self.position = start
+
     def follow(self, points: list[tuple[float, float]]) -> None:
         for x, y in points:
             self.cut(x, y)
 
     def retract(self) -> None:
         self.move(z=self.clearance, kind=MotionKind.RAPID)
-

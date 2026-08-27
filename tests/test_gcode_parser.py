@@ -58,6 +58,15 @@ class GcodeParserTests(unittest.TestCase):
         self.assertEqual(len(parsed.warnings), 1)
         self.assertIn("rayon R impossible", parsed.warnings[0])
 
+    def test_rigid_tapping_is_previewed_down_and_back_up(self) -> None:
+        parsed = parse_gcode("G21 G90\nS800 M3\nG0 X10 Y20 Z2\nG33.1 Z-8 K1.25\n")
+        motions = parsed.result.toolpaths[0].motions
+        self.assertEqual(motions[-2].kind, MotionKind.TAP)
+        self.assertEqual(motions[-1].kind, MotionKind.TAP_RETURN)
+        self.assertEqual(motions[-2].thread_pitch, 1.25)
+        self.assertEqual(motions[-2].feed, 1000)
+        self.assertEqual(motions[-1].end.z, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

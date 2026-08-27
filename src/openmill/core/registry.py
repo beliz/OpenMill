@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from importlib.metadata import entry_points
 from typing import Any, ClassVar
 
-from openmill.core.models import OperationRecord, Stock, Tool, Toolpath
+from openmill.core.models import OperationRecord, Placement, Stock, Tool, Toolpath
 from openmill.core.toolpath import ToolpathBuilder
 
 
@@ -42,6 +42,7 @@ class OperationPlugin(ABC):
     label: ClassVar[str]
     category: ClassVar[str]
     description: ClassVar[str]
+    picker_visible: ClassVar[bool] = True
     fields: ClassVar[tuple[FieldSpec, ...]] = ()
     common_fields: ClassVar[tuple[FieldSpec, ...]] = COMMON_FIELDS
 
@@ -61,11 +62,20 @@ class OperationPlugin(ABC):
 
     @classmethod
     def create_record(cls, stock: Stock, tool_number: int = 1) -> OperationRecord:
+        parameters = cls.defaults(stock)
+        anchor_x = float(parameters.get("center_x", stock.center_x))
+        anchor_y = float(parameters.get("center_y", stock.center_y))
         return OperationRecord(
             plugin_id=cls.id,
             title=cls.label,
             tool_number=tool_number,
-            parameters=cls.defaults(stock),
+            parameters=parameters,
+            placement=Placement(
+                start_x=anchor_x,
+                start_y=anchor_y,
+                center_x=stock.center_x,
+                center_y=stock.center_y,
+            ),
         )
 
     @classmethod

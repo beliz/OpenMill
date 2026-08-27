@@ -10,6 +10,9 @@
 - [x] Brut rectangulaire et visualisation du diamètre d’outil.
 - [x] Surfaçage, poches, hexagones, réseaux de perçage.
 - [x] Projets multi-opérations et G-code LinuxCNC.
+- [x] Placement unique, répétition linéaire, grille orientée et motif polaire.
+- [x] Séparation cycle / motif inspirée de la programmation conversationnelle Heidenhain.
+- [x] Perçage simple, profond, temporisé, alésage et taraudage rigide.
 - [x] Registre et extensions d’opérations.
 - [x] Tests automatisés et CI Windows/Linux.
 
@@ -21,7 +24,7 @@
 - [x] Contours rectangulaire, circulaire et polygonal intérieur/extérieur/sur tracé.
 - [x] Rainure droite et oblongue orientable.
 - [ ] Étendre finition et sens de coupe aux poches historiques.
-- [ ] Rainures radiales/circulaires, lamages et chanfreins.
+- [ ] Rainures radiales/circulaires, poches de lamage fraisées et chanfreins.
 - [ ] Contours libres et gravure simple.
 - [ ] Arcs `G2/G3` et réduction du nombre de segments.
 - [ ] Cycles de perçage LinuxCNC lorsque pertinents.

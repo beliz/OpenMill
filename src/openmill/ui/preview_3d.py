@@ -361,7 +361,10 @@ class VtkPreview(QWidget):
 
     def _add_toolpath(self, toolpath: Toolpath, color: str, *, active: bool) -> None:
         vtk = self._vtk
-        cuts = self._motion_polydata(toolpath, {MotionKind.CUT, MotionKind.PLUNGE})
+        cuts = self._motion_polydata(
+            toolpath,
+            {MotionKind.CUT, MotionKind.PLUNGE, MotionKind.TAP, MotionKind.TAP_RETURN},
+        )
         tube = vtk.vtkTubeFilter()
         tube.SetInputData(cuts)
         tube.SetRadius(toolpath.tool.diameter / 2)

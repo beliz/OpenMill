@@ -51,24 +51,27 @@
       "uid": "demo_pocket"
     },
     {
-      "plugin_id": "drill_circle",
+      "plugin_id": "drill_single",
       "title": "Huit perçages sur cercle",
       "tool_number": 5,
       "parameters": {
         "center_x": 70,
         "center_y": 47.5,
-        "diameter": 76,
-        "hole_count": 8,
-        "start_angle": 22.5,
-        "sweep": 360,
-        "peck": 0,
         "z_start": 0,
         "z_final": -11,
-        "step_down": 1,
         "clearance": 5,
-        "feed_xy": 600,
         "feed_z": 180,
-        "spindle_rpm": 12000
+        "spindle_rpm": 2500
+      },
+      "placement": {
+        "mode": "polar",
+        "center_x": 70,
+        "center_y": 47.5,
+        "diameter": 76,
+        "count": 8,
+        "start_angle": 22.5,
+        "sweep": 360,
+        "rotate_geometry": false
       },
       "enabled": true,
       "uid": "demo_drilling"
