@@ -116,6 +116,14 @@ def retranslate_widget_tree(root) -> None:
         try:
             if isinstance(item, (QtWidgets.QLabel, QtWidgets.QAbstractButton)):
                 item.setText(translate_text(item.text(), item.metaObject().className()))
+                if isinstance(item, QtWidgets.QAbstractButton) and item.text():
+                    available = max(1, item.width() - 12)
+                    font = item.font()
+                    original_size = font.pointSizeF() if font.pointSizeF() > 0 else 10.0
+                    while font.pointSizeF() > 7.0 and QtGui.QFontMetrics(font).horizontalAdvance(item.text()) > available:
+                        font.setPointSizeF(font.pointSizeF() - 0.5)
+                    if font.pointSizeF() < original_size:
+                        item.setFont(font)
             elif isinstance(item, QtWidgets.QGroupBox):
                 item.setTitle(translate_text(item.title(), item.metaObject().className()))
             elif isinstance(item, QtWidgets.QComboBox):
