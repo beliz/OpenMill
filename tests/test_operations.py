@@ -269,6 +269,11 @@ class OperationTests(unittest.TestCase):
     def test_lateral_rapid_motions_stay_at_clearance_height(self) -> None:
         for plugin in registry.all():
             operation = plugin.create_record(self.stock, 5 if plugin.id.startswith("drill_") else 1)
+            # Program/meta components (comments, probing commands, file
+            # inclusion, tool selection) intentionally have no clearance
+            # plane or preview motions.
+            if "clearance" not in operation.parameters:
+                continue
             path = plugin.generate(operation, self.stock, self.adapter.get_tool(operation.tool_number))
             clearance = operation.parameters["clearance"]
             for motion in path.motions:

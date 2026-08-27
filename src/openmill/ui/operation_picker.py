@@ -4,8 +4,19 @@ from __future__ import annotations
 
 import math
 
+from openmill.core.registry import OperationPlugin, registry
+from openmill.integration.i18n import retranslate_widget_tree, translate_text
 from openmill.ui.qt_core import QPointF, QRectF, QSize, Qt, QTimer
-from openmill.ui.qt_gui import QBrush, QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
+from openmill.ui.qt_gui import (
+    QBrush,
+    QColor,
+    QFont,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPolygonF,
+)
 from openmill.ui.qt_widgets import (
     QApplication,
     QDialog,
@@ -22,10 +33,6 @@ from openmill.ui.qt_widgets import (
     QWidget,
 )
 
-from openmill.core.registry import OperationPlugin, registry
-from openmill.integration.i18n import retranslate_widget_tree, translate_text
-
-
 CATEGORY_COLORS = {
     "Préparation": "#57d7a8",
     "Poches": "#62c6ff",
@@ -33,15 +40,50 @@ CATEGORY_COLORS = {
     "Rainures": "#ff8fa3",
     "Perçage": "#ffbf69",
     "Cycles de perçage": "#ffbf69",
+    "Formes NativeCAM": "#9f8cff",
+    "Rainures NativeCAM": "#ff8fa3",
+    "Préparation NativeCAM": "#57d7a8",
+    "Polylignes NativeCAM": "#77aaff",
+    "Lamages NativeCAM": "#ffb86b",
+    "Filetages NativeCAM": "#e6a8ff",
+    "Gravure NativeCAM": "#f6d365",
+    "Perçage NativeCAM": "#ffbf69",
+    "Groupes NativeCAM": "#5eead4",
+    "Outils NativeCAM": "#a7f3d0",
+    "Palpage NativeCAM": "#70d6ff",
+    "Projet NativeCAM": "#c4b5fd",
 }
 
 
 def _line(painter: QPainter, color: QColor, width: float = 2.0, dashed: bool = False) -> None:
-    painter.setPen(QPen(color, width, Qt.DashLine if dashed else Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+    painter.setPen(
+        QPen(color, width, Qt.DashLine if dashed else Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+    )
 
 
-def draw_operation_diagram(painter: QPainter, bounds: QRectF, plugin_id: str, accent: QColor) -> None:
+def draw_operation_diagram(
+    painter: QPainter, bounds: QRectF, plugin_id: str, accent: QColor
+) -> None:
     """Draw a recognizable operation schema without bitmap assets or SVG dependencies."""
+    nativecam_id = (
+        plugin_id.removeprefix("nativecam_") if plugin_id.startswith("nativecam_") else ""
+    )
+    plugin_id = {
+        "rectangle": "profile_rectangle",
+        "circle": "profile_circle",
+        "circle2": "profile_circle",
+        "slot1": "slot_straight",
+        "slot2": "slot_straight",
+        "polygon": "profile_polygon",
+        "surf_finish": "facing",
+        "drill_single": "drill_single",
+        "drill_arr": "drill_grid",
+        "drill_circle": "drill_circle",
+        "drill_circle_irr": "drill_circle",
+        "cb_single": "drill_dwell",
+        "thread_milling": "tap_rigid",
+        "circle_k": "profile_circle",
+    }.get(nativecam_id, plugin_id)
     painter.save()
     painter.setRenderHint(QPainter.Antialiasing, True)
     plate = bounds.adjusted(bounds.width() * 0.12, 9, -bounds.width() * 0.12, -9)
@@ -132,8 +174,12 @@ def draw_operation_diagram(painter: QPainter, bounds: QRectF, plugin_id: str, ac
         painter.setPen(QPen(muted, 1.2))
         painter.drawEllipse(center, radius * 0.48, radius * 0.48)
         _line(painter, muted, 1.1, dashed=True)
-        painter.drawLine(QPointF(center.x(), plate.top() + 7), QPointF(center.x(), plate.bottom() - 7))
-        painter.drawLine(QPointF(plate.left() + 28, center.y()), QPointF(plate.right() - 28, center.y()))
+        painter.drawLine(
+            QPointF(center.x(), plate.top() + 7), QPointF(center.x(), plate.bottom() - 7)
+        )
+        painter.drawLine(
+            QPointF(plate.left() + 28, center.y()), QPointF(plate.right() - 28, center.y())
+        )
         if plugin_id == "drill_peck":
             _line(painter, bright, 2.0)
             for offset in (-12, 0, 12):
@@ -167,7 +213,9 @@ def draw_operation_diagram(painter: QPainter, bounds: QRectF, plugin_id: str, ac
         painter.drawEllipse(center, radius, radius)
         for index in range(8):
             angle = math.tau * index / 8
-            position = QPointF(center.x() + radius * math.cos(angle), center.y() + radius * math.sin(angle))
+            position = QPointF(
+                center.x() + radius * math.cos(angle), center.y() + radius * math.sin(angle)
+            )
             painter.setPen(QPen(bright, 1.2))
             painter.setBrush(QColor(11, 16, 26, 235))
             painter.drawEllipse(position, 4, 4)
@@ -285,7 +333,10 @@ class OperationPickerDialog(QDialog):
             screen = QApplication.screenAt(parent.mapToGlobal(parent.rect().center()))
             if screen is not None:
                 available = screen.availableGeometry()
-                self.resize(min(1030, int(available.width() * 0.87)), min(830, int(available.height() * 0.86)))
+                self.resize(
+                    min(1030, int(available.width() * 0.87)),
+                    min(830, int(available.height() * 0.86)),
+                )
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(23, 19, 23, 19)
@@ -381,7 +432,9 @@ class OperationPickerDialog(QDialog):
             cards.setVerticalSpacing(11)
             for index, plugin in enumerate(matching):
                 tile = OperationTile(plugin)
-                tile.clicked.connect(lambda _checked=False, plugin_id=plugin.id: self._choose(plugin_id))
+                tile.clicked.connect(
+                    lambda _checked=False, plugin_id=plugin.id: self._choose(plugin_id)
+                )
                 cards.addWidget(tile, index // columns, index % columns)
                 visible_count += 1
             for column in range(columns):

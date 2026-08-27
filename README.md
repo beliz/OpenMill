@@ -2,7 +2,7 @@
 
 Atelier conversationnel de fraisage CNC, pensé pour être développé sous **Windows**, utilisé avec **LinuxCNC**, puis intégré proprement dans **Probe Basic / QtPyVCP**.
 
-**Version 0.10.0 — galerie corrigée, formules liées au brut et interface FR/US.**
+**Version 0.11.0 — catalogue NativeCAM 50/50 et traduction Probe Basic adaptée.**
 
 L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d’usinage, les opérations, les aperçus et la connexion machine sont séparés. Le même `QWidget` peut fonctionner comme application autonome ou devenir un onglet d’une interface LinuxCNC.
 
@@ -20,7 +20,7 @@ L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d�
 - Rainure droite/oblongue orientable avec ébauche et finition.
 - Cycles séparés de perçage simple, profond avec débourrage, avec pause/lamage et alésage.
 - Taraudage rigide LinuxCNC `G33.1`, à droite ou à gauche, avec contrôle explicite du pas.
-- Blocs de répétition indépendants : `Unique`, `Ligne`, `Grille` ou `Cercle`, contenant une ou plusieurs opérations.
+- Blocs de répétition indépendants : `Unique`, `Ligne`, `Grille`, `Cercle` ou indexation `Axe A`, contenant une ou plusieurs opérations.
 - Ordre d’usinage choisi pour chaque bloc : toutes les opérations par position ou chaque opération sur toutes les positions.
 - Arbre de programme hiérarchique, avec déplacement des opérations entre les répétitions.
 - Synchronisation garantie du modèle après chaque glisser-déposer et refus des imbrications invalides.
@@ -72,7 +72,9 @@ L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d�
 - Formulaires larges sur deux colonnes strictement égales, y compris après redimensionnement et avec de longs noms d’outils.
 - Extensions d’opérations installables indépendamment via les entry points Python.
 - Tests métier sans Qt, VTK ni LinuxCNC ; CI GitHub Windows et Linux.
-- [Audit versionné des 50 composants du catalogue NativeCAM fraisage](docs/nativecam-coverage.md), avec équivalents et fonctions encore absentes.
+- [Matrice versionnée des 50 composants du catalogue NativeCAM fraisage](docs/nativecam-coverage.md), tous disponibles comme composants OpenMill explicites.
+- Géométries NativeCAM réimplémentées nativement : méplats, définition par deux points, rainure radiale, ellipse, polylignes, lamages, interpolation hélicoïdale et gravure TrueType.
+- Composants de programme NativeCAM intégrés : changements d’outil, palpage, brut, G-code contrôlé, inclusion de fichier, commentaires et notes.
 
 ## Démarrage rapide sous Windows
 

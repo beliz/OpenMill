@@ -69,15 +69,21 @@ def generate_gcode(project: Project, paths: list[Toolpath]) -> str:
             current_position = path.repetition_position
         if path.instance_count > 1:
             placement = path.placement_summary.replace("·", "-").replace("×", "x")
-            lines.append(
-                f"(MOTIF - {_comment(placement)} - {path.instance_count} appels)"
-            )
-        if current_tool != path.tool.number:
+            lines.append(f"(MOTIF - {_comment(placement)} - {path.instance_count} appels)")
+        if path.tool_change_enabled and current_tool != path.tool.number:
             lines.extend((f"T{path.tool.number} M6", f"G43 H{path.tool.number}"))
             current_tool = path.tool.number
             current_feed = None
-        spindle_command = "M4" if path.spindle_direction == "counterclockwise" else "M3"
-        lines.append(f"S{path.spindle_rpm} {spindle_command}")
+        if path.rotary_angle is not None:
+            lines.append(f"G0 A{_number(path.rotary_angle)}")
+        if path.spindle_enabled:
+            spindle_command = "M4" if path.spindle_direction == "counterclockwise" else "M3"
+            lines.append(f"S{path.spindle_rpm} {spindle_command}")
+
+        for program_line in path.program_lines:
+            safe_line = program_line.strip()
+            if safe_line:
+                lines.append(safe_line)
 
         if path.motions:
             lines.append(f"G0 Z{_number(path.motions[0].start.z)}")
@@ -92,9 +98,7 @@ def generate_gcode(project: Project, paths: list[Toolpath]) -> str:
             if motion.kind is MotionKind.TAP:
                 if motion.thread_pitch is None or motion.thread_pitch <= 0:
                     raise ValueError("Un taraudage rigide nécessite un pas positif.")
-                lines.append(
-                    f"G33.1 Z{_number(motion.end.z)} K{_number(motion.thread_pitch)}"
-                )
+                lines.append(f"G33.1 Z{_number(motion.end.z)} K{_number(motion.thread_pitch)}")
                 current_feed = None
                 continue
             if motion.kind is MotionKind.TAP_RETURN:

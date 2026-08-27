@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 
 from openmill.core.models import (
     Motion,
@@ -24,6 +24,7 @@ class PlacementInstance:
     x: float
     y: float
     angle: float = 0.0
+    rotary_angle: float | None = None
 
 
 def operation_anchor(operation: OperationRecord, stock: Stock) -> tuple[float, float]:
@@ -94,6 +95,25 @@ def placement_instances(
                 )
         return instances
 
+    if placement.mode is PlacementMode.ROTARY:
+        if placement.count < 1:
+            raise ValueError("Une indexation doit contenir au moins une position.")
+        if not 0 < abs(placement.sweep) <= 360_000:
+            raise ValueError("L’angle d’indexation est invalide.")
+        divisor = (
+            placement.count
+            if math.isclose(abs(placement.sweep), 360.0)
+            else max(placement.count - 1, 1)
+        )
+        return [
+            PlacementInstance(
+                anchor_x,
+                anchor_y,
+                rotary_angle=placement.start_angle + placement.sweep * index / divisor,
+            )
+            for index in range(placement.count)
+        ]
+
     if placement.count < 1:
         raise ValueError("Une répétition circulaire doit contenir au moins une position.")
     if placement.diameter < 0:
@@ -102,7 +122,11 @@ def placement_instances(
         raise ValueError("Le diamètre de répétition doit être supérieur à zéro.")
     if not 0 < abs(placement.sweep) <= 360:
         raise ValueError("L’angle de répétition doit être compris entre -360° et 360°.")
-    divisor = placement.count if math.isclose(abs(placement.sweep), 360.0) else max(placement.count - 1, 1)
+    divisor = (
+        placement.count
+        if math.isclose(abs(placement.sweep), 360.0)
+        else max(placement.count - 1, 1)
+    )
     radius = placement.diameter / 2
     instances = []
     for index in range(placement.count):
@@ -170,7 +194,9 @@ def apply_placement(
         path.placement_summary = placement.summary
         return path
 
-    instances = instances if instances is not None else placement_instances(operation, stock, placement)
+    instances = (
+        instances if instances is not None else placement_instances(operation, stock, placement)
+    )
     anchor_x, anchor_y = operation_anchor(operation, stock)
     expanded = Toolpath(
         operation_uid=path.operation_uid,
@@ -183,9 +209,14 @@ def apply_placement(
         placement_summary=placement.summary,
         repetition_uid=path.repetition_uid,
         repetition_position=path.repetition_position,
+        program_lines=list(path.program_lines),
+        spindle_enabled=path.spindle_enabled,
+        tool_change_enabled=path.tool_change_enabled,
     )
     clearance = float(operation.parameters.get("clearance", 5.0))
     for instance in instances:
+        if instance.rotary_angle is not None:
+            expanded.rotary_angle = instance.rotary_angle
         transformed = [
             Motion(
                 _transform_point(

@@ -1,6 +1,6 @@
 # Intégrer OpenMill dans Probe Basic
 
-OpenMill 0.10.0 s’intègre comme **onglet utilisateur**, sans modifier le dépôt Probe Basic et sans faire de fork. La même extension fonctionne en simulation et sur une installation LinuxCNC réelle.
+OpenMill 0.11.0 s’intègre comme **onglet utilisateur**, sans modifier le dépôt Probe Basic et sans faire de fork. La même extension fonctionne en simulation et sur une installation LinuxCNC réelle.
 
 > Le chargement du programme et le départ cycle sont volontairement séparés. OpenMill ne démarre jamais une broche, un déplacement ou un programme.
 
@@ -216,7 +216,7 @@ le mécanisme d’extension officiel de QtPyVCP : il installe les catalogues apr
 `QApplication`, mais avant le chargement du `.ui` Probe Basic. Aucun fichier Python ou `.ui` de
 Probe Basic n’est modifié.
 
-La version 0.10 fournit l’interface OpenMill en français et en anglais US, ainsi qu’un catalogue
+La version 0.11 fournit l’interface OpenMill en français et en anglais US, ainsi qu’un catalogue
 français des principales pages et commandes Probe Basic. Les textes techniques rares, les longs
 blocs d’aide HTML et les chaînes explicitement marquées `notr="true"` en amont restent en anglais ;
 ils peuvent être ajoutés au catalogue JSON sans modifier Probe Basic.

@@ -169,7 +169,7 @@ def _resolve_repetition_formulas(
         if not hasattr(placement, key):
             raise ValueError(f"La formule du champ inconnu {key} ne peut pas être évaluée.")
         current = getattr(placement, key)
-        if isinstance(current, (bool, str, PlacementMode)):
+        if isinstance(current, bool | str | PlacementMode):
             raise ValueError(f"Le champ {key} n’accepte pas de formule numérique.")
         value = evaluate_numeric_expression(expression, variables)
         if key in integer_fields:
@@ -199,10 +199,9 @@ def build_project(project: Project, adapter: MachineAdapter) -> BuildResult:
             operation = operations[0]
             _add_issue(result, BuildIssue(operation.uid, operation.title, str(error)))
             continue
-        if (
-            repetition.placement.mode is PlacementMode.SINGLE
-            or repetition.execution_order is RepetitionOrder.BY_OPERATION
-            or len(operations) == 1
+        if repetition.placement.mode is PlacementMode.SINGLE or (
+            repetition.placement.mode is not PlacementMode.ROTARY
+            and (repetition.execution_order is RepetitionOrder.BY_OPERATION or len(operations) == 1)
         ):
             for operation in operations:
                 _build_operation_call(

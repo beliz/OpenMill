@@ -86,9 +86,7 @@ class PlacementTests(unittest.TestCase):
 
         self.assertFalse(result.errors)
         plunges = [
-            motion.end
-            for motion in result.toolpaths[0].motions
-            if motion.kind is MotionKind.PLUNGE
+            motion.end for motion in result.toolpaths[0].motions if motion.kind is MotionKind.PLUNGE
         ]
         self.assertEqual(len(plunges), 2)
         self.assertAlmostEqual(abs(plunges[0].x - plunges[1].x), 60)
@@ -116,7 +114,9 @@ class PlacementTests(unittest.TestCase):
         path = result.toolpaths[0]
         plunges = [motion for motion in path.motions if motion.kind is MotionKind.PLUNGE]
         self.assertEqual(path.instance_count, 3)
-        self.assertEqual([(motion.end.x, motion.end.y) for motion in plunges], [(20, 15), (45, 20), (70, 25)])
+        self.assertEqual(
+            [(motion.end.x, motion.end.y) for motion in plunges], [(20, 15), (45, 20), (70, 25)]
+        )
 
     def test_grid_uses_serpentine_order_and_rotation(self) -> None:
         operation = self.operation()
@@ -160,7 +160,10 @@ class PlacementTests(unittest.TestCase):
         result = build_project(Project(stock=self.stock, operations=[operation]), self.adapter)
         clearance = operation.parameters["clearance"]
         for motion in result.toolpaths[0].motions:
-            lateral = abs(motion.start.x - motion.end.x) > 1e-8 or abs(motion.start.y - motion.end.y) > 1e-8
+            lateral = (
+                abs(motion.start.x - motion.end.x) > 1e-8
+                or abs(motion.start.y - motion.end.y) > 1e-8
+            )
             if motion.kind is MotionKind.RAPID and lateral:
                 self.assertGreaterEqual(motion.start.z, clearance)
                 self.assertGreaterEqual(motion.end.z, clearance)
@@ -204,6 +207,23 @@ class PlacementTests(unittest.TestCase):
             [(path.operation_title, path.repetition_position) for path in result.toolpaths],
             [("Premier", 1), ("Second", 1), ("Premier", 2), ("Second", 2)],
         )
+
+    def test_rotary_repetition_emits_one_a_index_per_call(self) -> None:
+        operation = registry.get("drill_single").create_record(self.stock, 5)
+        project = Project(stock=self.stock, operations=[operation])
+        repetition = project.repetition_for(operation.uid)
+        assert repetition is not None
+        repetition.placement.mode = PlacementMode.ROTARY
+        repetition.placement.count = 4
+        repetition.placement.start_angle = 0
+        repetition.placement.sweep = 360
+
+        result = build_project(project, self.adapter)
+        program = generate_gcode(project, result.toolpaths)
+
+        self.assertFalse(result.errors)
+        self.assertEqual([path.rotary_angle for path in result.toolpaths], [0, 90, 180, 270])
+        self.assertEqual(program.count("G0 A"), 4)
 
     def test_user_can_execute_nested_operations_by_operation(self) -> None:
         first = self.operation()

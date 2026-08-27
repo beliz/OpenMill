@@ -26,6 +26,7 @@ from openmill.ui.qt_widgets import (
     QGridLayout,
     QLabel,
     QLineEdit,
+    QPlainTextEdit,
     QScrollArea,
     QScroller,
     QSizePolicy,
@@ -59,8 +60,7 @@ class OperationForm(QWidget):
         self._description.setObjectName("muted")
         layout.addWidget(self._description)
         calculation_hint = QLabel(
-            "Astuce · variables : tool_diam, stock_x et stock_y "
-            "(ex. stock_x/2-tool_diam)."
+            "Astuce · variables : tool_diam, stock_x et stock_y (ex. stock_x/2-tool_diam)."
         )
         calculation_hint.setObjectName("muted")
         layout.addWidget(calculation_hint)
@@ -227,6 +227,20 @@ class OperationForm(QWidget):
     ) -> QWidget:
         if specification.kind == "choice":
             field = SegmentedChoice(specification, value)
+        elif specification.kind == "multiline":
+            field = QPlainTextEdit(str(value))
+            field.setMinimumHeight(96)
+            field.textChanged.connect(lambda: callback(field.toPlainText()))
+            if specification.tip:
+                field.setPlaceholderText(specification.tip)
+            return field
+        elif specification.kind == "text":
+            field = QLineEdit(str(value))
+            field.setMinimumHeight(40)
+            field.textChanged.connect(callback)
+            if specification.tip:
+                field.setPlaceholderText(specification.tip)
+            return field
         elif uses_angle_dial(specification):
             field = AngleControl(
                 specification,

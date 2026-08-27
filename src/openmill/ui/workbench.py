@@ -5,6 +5,26 @@ from __future__ import annotations
 from pathlib import Path
 
 from openmill import __version__
+from openmill.adapters.base import MachineAdapter
+from openmill.adapters.mock import MockMachineAdapter
+from openmill.core.engine import BuildResult, build_project, create_demo_project
+from openmill.core.gcode import generate_gcode
+from openmill.core.models import (
+    OperationRecord,
+    OriginMode,
+    PlacementMode,
+    Project,
+    RepetitionBlock,
+    RepetitionOrder,
+)
+from openmill.core.project_io import load_project, save_project
+from openmill.core.registry import registry
+from openmill.integration.bridge import ProgramBridge, ProgramLoadError, prepare_and_load_program
+from openmill.integration.i18n import retranslate_widget_tree, translate_text
+from openmill.integration.runtime import configured_language
+from openmill.ui.operation_form import OperationForm
+from openmill.ui.operation_picker import OperationPickerDialog
+from openmill.ui.preview_2d import VectorPreview
 from openmill.ui.qt_core import QLocale, Qt, QTimer, pyqtSignal
 from openmill.ui.qt_gui import QKeySequence
 from openmill.ui.qt_widgets import (
@@ -28,29 +48,8 @@ from openmill.ui.qt_widgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from openmill.adapters.base import MachineAdapter
-from openmill.adapters.mock import MockMachineAdapter
-from openmill.core.engine import BuildResult, build_project, create_demo_project
-from openmill.core.gcode import generate_gcode
-from openmill.core.models import (
-    OperationRecord,
-    OriginMode,
-    Project,
-    RepetitionBlock,
-    RepetitionOrder,
-)
-from openmill.core.project_io import load_project, save_project
-from openmill.core.registry import registry
-from openmill.integration.bridge import ProgramBridge, ProgramLoadError, prepare_and_load_program
-from openmill.integration.i18n import retranslate_widget_tree, translate_text
-from openmill.integration.runtime import configured_language
-from openmill.ui.operation_form import OperationForm
-from openmill.ui.operation_picker import OperationPickerDialog
-from openmill.ui.preview_2d import VectorPreview
 from openmill.ui.repetition_form import RepetitionForm
 from openmill.ui.theme import STYLESHEET
-
 
 ITEM_UID_ROLE = int(Qt.UserRole)
 ITEM_KIND_ROLE = ITEM_UID_ROLE + 1
@@ -75,8 +74,7 @@ class ProgramTreeWidget(QTreeWidget):
             invalid_parent = target is not None and target.parent() is not None
             indicator_type = getattr(QAbstractItemView, "DropIndicatorPosition", QAbstractItemView)
             invalid_nesting = (
-                target is not None
-                and self.dropIndicatorPosition() == indicator_type.OnItem
+                target is not None and self.dropIndicatorPosition() == indicator_type.OnItem
             )
             if invalid_parent or invalid_nesting:
                 event.ignore()
@@ -169,7 +167,12 @@ class ConversationalWorkbench(QWidget):
         panel.setMinimumWidth(215)
         panel.setMaximumWidth(370)
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(8 if self._embedded else 13, 6 if self._embedded else 12, 8 if self._embedded else 13, 6 if self._embedded else 12)
+        layout.setContentsMargins(
+            8 if self._embedded else 13,
+            6 if self._embedded else 12,
+            8 if self._embedded else 13,
+            6 if self._embedded else 12,
+        )
 
         piece_heading = QHBoxLayout()
         piece_label = QLabel("PIÈCE")
@@ -197,7 +200,11 @@ class ConversationalWorkbench(QWidget):
         self._stock_width = self._stock_spinbox(self._project.stock.width)
         self._stock_height = self._stock_spinbox(self._project.stock.height)
         self._stock_thickness = self._stock_spinbox(self._project.stock.thickness)
-        for axis, control in (("X", self._stock_width), ("Y", self._stock_height), ("Z", self._stock_thickness)):
+        for axis, control in (
+            ("X", self._stock_width),
+            ("Y", self._stock_height),
+            ("Z", self._stock_thickness),
+        ):
             column = QVBoxLayout()
             label = QLabel(axis)
             label.setObjectName("muted")
@@ -252,7 +259,12 @@ class ConversationalWorkbench(QWidget):
     def _create_preview_panel(self) -> QWidget:
         panel = _panel()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(8 if self._embedded else 12, 5 if self._embedded else 10, 8 if self._embedded else 12, 5 if self._embedded else 10)
+        layout.setContentsMargins(
+            8 if self._embedded else 12,
+            5 if self._embedded else 10,
+            8 if self._embedded else 12,
+            5 if self._embedded else 10,
+        )
         toolbar = QHBoxLayout()
         title = QLabel("APERÇU D’USINAGE")
         title.setObjectName("section")
@@ -260,7 +272,12 @@ class ConversationalWorkbench(QWidget):
         toolbar.addStretch()
         self._view_buttons = QButtonGroup(self)
         self._view_buttons.setExclusive(True)
-        for plane, label in (("XY", "Dessus · XY"), ("XZ", "Face · XZ"), ("YZ", "Côté · YZ"), ("3D", "Vue 3D")):
+        for plane, label in (
+            ("XY", "Dessus · XY"),
+            ("XZ", "Face · XZ"),
+            ("YZ", "Côté · YZ"),
+            ("3D", "Vue 3D"),
+        ):
             button = QPushButton(label)
             button.setCheckable(True)
             button.setChecked(plane == "XY")
@@ -314,7 +331,9 @@ class ConversationalWorkbench(QWidget):
         title = QLabel("G-CODE LINUXCNC")
         title.setObjectName("section")
         title_row.addWidget(title)
-        self._gcode_toggle = QPushButton("Afficher le programme" if self._embedded else "Masquer le programme")
+        self._gcode_toggle = QPushButton(
+            "Afficher le programme" if self._embedded else "Masquer le programme"
+        )
         self._gcode_toggle.setObjectName("gcodeToggle")
         self._gcode_toggle.setCheckable(True)
         self._gcode_toggle.setChecked(not self._embedded)
@@ -359,7 +378,9 @@ class ConversationalWorkbench(QWidget):
             widget.setValue(value)
             widget.blockSignals(False)
         self._origin.blockSignals(True)
-        self._origin.setCurrentIndex(max(0, self._origin.findData(self._project.stock.origin.value)))
+        self._origin.setCurrentIndex(
+            max(0, self._origin.findData(self._project.stock.origin.value))
+        )
         self._origin.blockSignals(False)
 
     def _populate_operations(self, selected_uid: str | None = None) -> None:
@@ -426,10 +447,7 @@ class ConversationalWorkbench(QWidget):
                 f"× {repetition.placement.rows}"
             )
         else:
-            summary = (
-                f"{label} · {repetition.placement.count} "
-                f"{translate_text('positions')}"
-            )
+            summary = f"{label} · {repetition.placement.count} {translate_text('positions')}"
         return f"{title}\n{summary}  ·  {order}"
 
     def _selected_operation(self) -> OperationRecord | None:
@@ -437,7 +455,9 @@ class ConversationalWorkbench(QWidget):
         if item is None or item.data(0, ITEM_KIND_ROLE) != "operation":
             return None
         uid = item.data(0, ITEM_UID_ROLE)
-        return next((operation for operation in self._project.operations if operation.uid == uid), None)
+        return next(
+            (operation for operation in self._project.operations if operation.uid == uid), None
+        )
 
     def _selected_repetition(self) -> RepetitionBlock | None:
         item = self._program_tree.currentItem()
@@ -461,9 +481,13 @@ class ConversationalWorkbench(QWidget):
     def _rebuild(self) -> None:
         self._result = build_project(self._project, self._adapter)
         if self._plane == "3D" and self._preview_3d is not None:
-            self._preview_3d.set_content(self._project, self._result, selected_uid=self._selected_uid())
+            self._preview_3d.set_content(
+                self._project, self._result, selected_uid=self._selected_uid()
+            )
         else:
-            self._preview_2d.set_content(self._project, self._result, selected_uid=self._selected_uid(), plane=self._plane)
+            self._preview_2d.set_content(
+                self._project, self._result, selected_uid=self._selected_uid(), plane=self._plane
+            )
         self._gcode.setPlainText(self.generated_gcode)
         count = len(self._result.toolpaths)
         count_template = (
@@ -523,11 +547,15 @@ class ConversationalWorkbench(QWidget):
     def _program_item_changed(self, item: QTreeWidgetItem, _column: int) -> None:
         uid = item.data(0, ITEM_UID_ROLE)
         if item.data(0, ITEM_KIND_ROLE) == "repetition":
-            repetition = next((entry for entry in self._project.repetitions if entry.uid == uid), None)
+            repetition = next(
+                (entry for entry in self._project.repetitions if entry.uid == uid), None
+            )
             if repetition is not None:
                 repetition.enabled = item.checkState(0) == Qt.Checked
         else:
-            operation = next((entry for entry in self._project.operations if entry.uid == uid), None)
+            operation = next(
+                (entry for entry in self._project.operations if entry.uid == uid), None
+            )
             if operation is not None:
                 operation.enabled = item.checkState(0) == Qt.Checked
         self._schedule_refresh()
@@ -602,7 +630,7 @@ class ConversationalWorkbench(QWidget):
 
     def add_operation(self, plugin_id: str) -> None:
         plugin = registry.get(plugin_id)
-        suggested_tool = 5 if plugin_id.startswith("drill_") else 4 if plugin_id == "facing" else 1
+        suggested_tool = 5 if "Perçage" in plugin.category else 4 if plugin_id == "facing" else 1
         available = {tool.number for tool in self._adapter.get_tools()}
         if suggested_tool not in available and available:
             suggested_tool = min(available)
@@ -626,7 +654,43 @@ class ConversationalWorkbench(QWidget):
     def show_operation_picker(self) -> None:
         dialog = OperationPickerDialog(self)
         if dialog.exec() and dialog.selected_plugin_id:
-            self.add_operation(dialog.selected_plugin_id)
+            plugin = registry.get(dialog.selected_plugin_id)
+            source_id = getattr(plugin, "nativecam_source_id", "")
+            if source_id.startswith("group_"):
+                self._add_nativecam_group(source_id)
+            else:
+                self.add_operation(dialog.selected_plugin_id)
+
+    def _add_nativecam_group(self, source_id: str) -> None:
+        """Create the first-class OpenMill block matching a NativeCAM group."""
+
+        repetition = RepetitionBlock()
+        placement = repetition.placement
+        placement.start_x = self._project.stock.center_x
+        placement.start_y = self._project.stock.center_y
+        placement.center_x = self._project.stock.center_x
+        placement.center_y = self._project.stock.center_y
+        if source_id == "group_off":
+            placement.mode = PlacementMode.GRID
+            placement.columns = placement.rows = 1
+            placement.rotate_geometry = True
+        elif source_id == "group_radial":
+            placement.mode = PlacementMode.POLAR
+            placement.count = 6
+            placement.diameter = min(self._project.stock.width, self._project.stock.height) * 0.6
+            placement.rotate_geometry = True
+        elif source_id == "group_arr":
+            placement.mode = PlacementMode.GRID
+            placement.columns = 2
+            placement.rows = 3
+        elif source_id == "group_index":
+            placement.mode = PlacementMode.ROTARY
+            placement.count = 4
+            placement.start_angle = 0
+            placement.sweep = 360
+        self._project.repetitions.append(repetition)
+        self._populate_operations(repetition.uid)
+        self._schedule_refresh()
 
     def duplicate_selected(self) -> None:
         current = self._selected_operation()
@@ -669,7 +733,9 @@ class ConversationalWorkbench(QWidget):
             return
         operation_uids = set(repetition.operation_uids)
         self._project.operations = [
-            operation for operation in self._project.operations if operation.uid not in operation_uids
+            operation
+            for operation in self._project.operations
+            if operation.uid not in operation_uids
         ]
         self._project.repetitions.remove(repetition)
         self._populate_operations()

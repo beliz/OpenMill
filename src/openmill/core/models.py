@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field, replace
 from enum import Enum
-import math
 from typing import Any
 from uuid import uuid4
 
@@ -30,6 +30,7 @@ class PlacementMode(str, Enum):
     LINEAR = "linear"
     GRID = "grid"
     POLAR = "polar"
+    ROTARY = "rotary"
 
 
 class RepetitionOrder(str, Enum):
@@ -155,7 +156,9 @@ class Placement:
             return f"Ligne · {self.count} positions"
         if self.mode is PlacementMode.GRID:
             return f"Grille · {self.columns} × {self.rows}"
-        return f"Cercle · {self.count} positions"
+        if self.mode is PlacementMode.POLAR:
+            return f"Cercle · {self.count} positions"
+        return f"Axe A · {self.count} indexations"
 
     @property
     def label(self) -> str:
@@ -164,6 +167,7 @@ class Placement:
             PlacementMode.LINEAR: "Ligne",
             PlacementMode.GRID: "Grille",
             PlacementMode.POLAR: "Cercle",
+            PlacementMode.ROTARY: "Axe A",
         }[self.mode]
 
 
@@ -253,6 +257,10 @@ class Toolpath:
     placement_summary: str = "Position unique"
     repetition_uid: str = ""
     repetition_position: int | None = None
+    program_lines: list[str] = field(default_factory=list)
+    spindle_enabled: bool = True
+    tool_change_enabled: bool = True
+    rotary_angle: float | None = None
 
     @property
     def cutting_length(self) -> float:

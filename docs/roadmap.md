@@ -24,8 +24,9 @@
 - [x] Contours rectangulaire, circulaire et polygonal intérieur/extérieur/sur tracé.
 - [x] Rainure droite et oblongue orientable.
 - [ ] Étendre finition et sens de coupe aux poches historiques.
-- [ ] Rainures radiales/circulaires, poches de lamage fraisées et chanfreins.
-- [ ] Contours libres et gravure simple.
+- [x] Rainures radiales/circulaires et poches de lamage fraisées NativeCAM.
+- [x] Polylignes avancées, symétries et gravure TrueType.
+- [x] Parité fonctionnelle des 50 composants du menu NativeCAM fraisage.
 - [ ] Arcs `G2/G3` et réduction du nombre de segments.
 - [ ] Cycles de perçage LinuxCNC lorsque pertinents.
 - [ ] Bibliothèque matières, outils et recommandations d’avance.
@@ -49,5 +50,6 @@
 - [x] Documentation et installateur réversible sans modification upstream.
 - [x] Chargeur de catalogues Qt/JSON et langue configurable sans fork Probe Basic.
 - [x] Interface OpenMill FR/US et catalogue français des commandes usuelles Probe Basic.
+- [x] Indexation conversationnelle Axe A et composants de palpage NativeCAM explicites.
 - [ ] Traduction des aides HTML rares et contrôle exhaustif des chaînes `notr` upstream.
 - [ ] Validation sur plusieurs versions réelles de Probe Basic et proposition upstream.

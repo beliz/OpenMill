@@ -3,7 +3,6 @@
 from openmill.core.models import PlacementMode, RepetitionOrder
 from openmill.core.registry import FieldSpec
 
-
 PLACEMENT_MODE = FieldSpec(
     "mode",
     "Type de répétition",
@@ -15,6 +14,7 @@ PLACEMENT_MODE = FieldSpec(
         (PlacementMode.LINEAR.value, "Ligne"),
         (PlacementMode.GRID.value, "Grille"),
         (PlacementMode.POLAR.value, "Cercle"),
+        (PlacementMode.ROTARY.value, "Axe A"),
     ),
     tip="Le motif est indépendant des opérations qu’il contient.",
 )
@@ -96,11 +96,17 @@ POLAR_PLACEMENT_FIELDS = (
     ),
 )
 
+ROTARY_PLACEMENT_FIELDS = (
+    FieldSpec("count", "Nombre d’indexations", 4, unit="", minimum=1, maximum=9999, kind="int"),
+    FieldSpec("start_angle", "Angle de départ A", 0.0, unit="°", minimum=-360_000, maximum=360_000),
+    FieldSpec("sweep", "Angle total A", 360.0, unit="°", minimum=-360_000, maximum=360_000),
+)
+
 
 PLACEMENT_FIELDS = {
     PlacementMode.SINGLE: (),
     PlacementMode.LINEAR: LINEAR_PLACEMENT_FIELDS,
     PlacementMode.GRID: GRID_PLACEMENT_FIELDS,
     PlacementMode.POLAR: POLAR_PLACEMENT_FIELDS,
+    PlacementMode.ROTARY: ROTARY_PLACEMENT_FIELDS,
 }
-
