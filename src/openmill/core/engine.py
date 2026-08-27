@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
-from openmill import operations as _registered_operations
+from openmill import operations as _registered_operations  # noqa: F401
 from openmill.adapters.base import MachineAdapter
 from openmill.core.models import (
     MotionKind,
@@ -15,9 +15,9 @@ from openmill.core.models import (
     Stock,
     Toolpath,
 )
+from openmill.core.parameter_controls import evaluate_field_expression
 from openmill.core.placement import PlacementInstance, apply_placement, placement_instances
 from openmill.core.registry import registry
-
 
 registry.discover_entry_points()
 
@@ -121,12 +121,23 @@ def _build_operation_call(
     try:
         plugin = registry.get(operation.plugin_id)
         tool = adapter.get_tool(operation.tool_number)
-        path = plugin.generate(operation, project.stock, tool)
+        parameters = dict(operation.parameters)
+        specifications = {specification.key: specification for specification in plugin.all_fields()}
+        for key, expression in operation.expressions.items():
+            if key not in specifications:
+                raise ValueError(f"La formule du champ inconnu {key} ne peut pas être évaluée.")
+            parameters[key] = evaluate_field_expression(
+                specifications[key],
+                expression,
+                {"tool_diam": float(tool.diameter)},
+            )
+        resolved_operation = replace(operation, parameters=parameters)
+        path = plugin.generate(resolved_operation, project.stock, tool)
         path.repetition_uid = repetition.uid
         path.repetition_position = position
         toolpath = apply_placement(
             path,
-            operation,
+            resolved_operation,
             project.stock,
             placement=repetition.placement,
             instances=instances,

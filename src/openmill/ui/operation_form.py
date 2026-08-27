@@ -2,19 +2,6 @@
 
 from __future__ import annotations
 
-from openmill.ui.qt_core import Qt, pyqtSignal
-from openmill.ui.qt_widgets import (
-    QComboBox,
-    QFrame,
-    QGridLayout,
-    QLabel,
-    QLineEdit,
-    QScrollArea,
-    QScroller,
-    QVBoxLayout,
-    QWidget,
-)
-
 from openmill.adapters.base import MachineAdapter
 from openmill.core.models import OperationRecord, PlacementMode
 from openmill.core.parameter_controls import uses_angle_dial, uses_percentage_slider
@@ -24,6 +11,19 @@ from openmill.ui.parameter_controls import (
     PercentageControl,
     SegmentedChoice,
     TouchNumberControl,
+)
+from openmill.ui.qt_core import Qt, pyqtSignal
+from openmill.ui.qt_widgets import (
+    QComboBox,
+    QFrame,
+    QGridLayout,
+    QLabel,
+    QLineEdit,
+    QScrollArea,
+    QScroller,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
 
 
@@ -45,7 +45,7 @@ class OperationForm(QWidget):
         self._description.setObjectName("muted")
         layout.addWidget(self._description)
         calculation_hint = QLabel(
-            "Astuce · calculs acceptés : 120/2, 40+5, 12*3 et parenthèses."
+            "Astuce · calculs acceptés : 120/2, 12*3 et tool_diam (ex. 5+tool_diam/2)."
         )
         calculation_hint.setObjectName("muted")
         layout.addWidget(calculation_hint)
@@ -66,6 +66,7 @@ class OperationForm(QWidget):
     def set_operation(self, operation: OperationRecord | None) -> None:
         self._loading = True
         self._operation = operation
+        self._formula_controls: list[QWidget] = []
         self._grid_row = 0
         self._grid_column = 0
         for row in range(self._form.rowCount()):
@@ -86,10 +87,14 @@ class OperationForm(QWidget):
         self._description.setText(plugin.description)
         title = QLineEdit(operation.title)
         title.setMinimumHeight(40)
+        title.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         title.textChanged.connect(self._title_changed)
         self._add_parameter("Nom de l’étape", title)
         tools = QComboBox()
         tools.setMinimumHeight(41)
+        tools.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        tools.setMinimumContentsLength(10)
+        tools.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         for tool in self._adapter.get_tools():
             tools.addItem(
                 f"T{tool.number}  ·  Ø {tool.diameter:g} mm  ·  {tool.name}",
@@ -150,6 +155,8 @@ class OperationForm(QWidget):
     ) -> None:
         card = QFrame()
         card.setObjectName("parameterCard")
+        card.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        control.setSizePolicy(QSizePolicy.Ignored, control.sizePolicy().verticalPolicy())
         layout = QVBoxLayout(card)
         layout.setContentsMargins(9, 7, 9, 8)
         layout.setSpacing(5)
@@ -189,6 +196,7 @@ class OperationForm(QWidget):
             expression_callback=lambda current, key=specification.key: self._expression_changed(
                 key, current
             ),
+            variables=self._tool_variables(operation),
         )
 
     def _create_control(
@@ -199,21 +207,46 @@ class OperationForm(QWidget):
         *,
         expression: str = "",
         expression_callback=None,
+        variables=None,
     ) -> QWidget:
         if specification.kind == "choice":
             field = SegmentedChoice(specification, value)
         elif uses_angle_dial(specification):
-            field = AngleControl(specification, float(value), expression=expression)
+            field = AngleControl(
+                specification,
+                float(value),
+                expression=expression,
+                variables=variables,
+            )
         elif uses_percentage_slider(specification):
-            field = PercentageControl(specification, float(value), expression=expression)
+            field = PercentageControl(
+                specification,
+                float(value),
+                expression=expression,
+                variables=variables,
+            )
         else:
-            field = TouchNumberControl(specification, value, expression=expression)
+            field = TouchNumberControl(
+                specification,
+                value,
+                expression=expression,
+                variables=variables,
+            )
         field.value_changed.connect(callback)
         if expression_callback is not None and hasattr(field, "expression_changed"):
             field.expression_changed.connect(expression_callback)
         if specification.tip:
             field.setToolTip(specification.tip)
+        if hasattr(field, "set_variables"):
+            self._formula_controls.append(field)
         return field
+
+    def _tool_variables(self, operation: OperationRecord) -> dict[str, float]:
+        try:
+            tool = self._adapter.get_tool(operation.tool_number)
+        except ValueError:
+            return {}
+        return {"tool_diam": float(tool.diameter)}
 
     def _title_changed(self, title: str) -> None:
         if self._operation is not None and not self._loading:
@@ -223,6 +256,9 @@ class OperationForm(QWidget):
     def _tool_changed(self, tool_number: int | None) -> None:
         if self._operation is not None and tool_number is not None and not self._loading:
             self._operation.tool_number = tool_number
+            variables = self._tool_variables(self._operation)
+            for control in self._formula_controls:
+                control.set_variables(variables)
             self.operation_changed.emit()
 
     def _parameter_changed(self, key: str, value) -> None:

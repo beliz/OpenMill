@@ -1,0 +1,5 @@
+# Merge this data plugin into the machine custom_config.yml to install Qt
+# catalogs before Probe Basic loads its main .ui file.
+data_plugins:
+  openmill_i18n:
+    provider: openmill.integration.i18n:TranslationPlugin

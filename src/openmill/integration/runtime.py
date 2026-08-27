@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+import os
+import platform
+import sys
+from collections.abc import Callable, Mapping
 from configparser import ConfigParser
 from dataclasses import asdict, dataclass
 from importlib.util import find_spec
-import os
 from pathlib import Path
-import platform
-import sys
-from typing import Callable, Mapping
 
 
 def binding_candidates(
@@ -68,6 +68,47 @@ def configured_theme(
             if value:
                 return value
     return default
+
+
+def configured_language(
+    *,
+    environ: Mapping[str, str] | None = None,
+    default: str = "fr",
+) -> str:
+    """Read and normalize the OpenMill language from the environment or INI."""
+
+    environment = os.environ if environ is None else environ
+    value = environment.get("OPENMILL_LANGUAGE", "").strip()
+    configured = environment.get("INI_FILE_NAME") or environment.get("LINUXCNC_INI")
+    if not value and configured:
+        source = Path(configured).expanduser()
+        if source.is_file():
+            parser = ConfigParser(interpolation=None, strict=False)
+            parser.read(source, encoding="utf-8")
+            value = parser.get("DISPLAY", "OPENMILL_LANGUAGE", fallback="").strip()
+    if not value:
+        value = default
+    if value.lower() in {"auto", "system", "default"}:
+        value = next(
+            (
+                environment.get(name, "")
+                for name in ("LC_ALL", "LC_MESSAGES", "LANGUAGE", "LANG")
+                if environment.get(name, "")
+            ),
+            default,
+        )
+    value = value.split(":", 1)[0].split(".", 1)[0].split("@", 1)[0]
+    value = value.replace("-", "_").strip()
+    if not value or value.upper() in {"C", "POSIX"}:
+        return default
+    parts = value.split("_", 1)
+    language = parts[0].lower()
+    if not language.isalpha() or not 2 <= len(language) <= 3:
+        return default
+    if len(parts) == 1 or not parts[1]:
+        return language
+    territory = parts[1].upper()
+    return f"{language}_{territory}" if territory.isalpha() else language
 
 
 @dataclass(frozen=True, slots=True)

@@ -47,4 +47,6 @@
 - [ ] Compatibilité VTK Debian / LinuxCNC mesurée.
 - [x] Synchronisation optionnelle avec le backplot Probe Basic.
 - [x] Documentation et installateur réversible sans modification upstream.
+- [x] Chargeur de catalogues Qt et langue configurable sans fork Probe Basic.
+- [ ] Catalogue français exhaustif de Probe Basic et contrôle des chaînes `notr`/dynamiques.
 - [ ] Validation sur plusieurs versions réelles de Probe Basic et proposition upstream.

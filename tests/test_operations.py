@@ -5,7 +5,7 @@ import unittest
 
 from openmill.adapters.mock import MockMachineAdapter
 from openmill.core.engine import build_project
-from openmill.core.models import MotionKind, OriginMode, Project, Stock
+from openmill.core.models import MotionKind, OriginMode, Project, Stock, Tool
 from openmill.core.registry import registry
 
 
@@ -214,6 +214,21 @@ class OperationTests(unittest.TestCase):
         result = build_project(Project(stock=self.stock, operations=[valid, invalid]), self.adapter)
         self.assertEqual(len(result.toolpaths), 1)
         self.assertEqual(len(result.errors), 1)
+
+    def test_project_build_recomputes_tool_diameter_formulas(self) -> None:
+        adapter = MockMachineAdapter((Tool(9, 20.0, "Foret de test", 40.0),))
+        operation = registry.get("drill_single").create_record(self.stock, 9)
+        operation.parameters["center_x"] = 0
+        operation.expressions["center_x"] = "5+tool_diam/2"
+
+        result = build_project(Project(stock=self.stock, operations=[operation]), adapter)
+
+        self.assertFalse(result.errors)
+        plunge = next(
+            motion for motion in result.toolpaths[0].motions if motion.kind is MotionKind.PLUNGE
+        )
+        self.assertEqual(plunge.end.x, 15)
+        self.assertEqual(operation.parameters["center_x"], 0)
 
     def test_disabled_operations_are_ignored(self) -> None:
         operation = registry.get("facing").create_record(self.stock)

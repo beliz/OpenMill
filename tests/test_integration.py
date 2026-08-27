@@ -25,9 +25,11 @@ from openmill.integration.bridge import (
     project_filename,
 )
 from openmill.integration.check import main as check_main
+from openmill.integration.i18n import language_variants, translation_directories
 from openmill.integration.qtpyvcp_compat import silence_gcode_properties_debug_output
 from openmill.integration.runtime import (
     binding_candidates,
+    configured_language,
     configured_theme,
     inspect_runtime,
     program_directory,
@@ -223,6 +225,32 @@ class RuntimeDiscoveryTests(unittest.TestCase):
             ),
             "modern",
         )
+
+    def test_language_can_be_selected_in_machine_ini(self) -> None:
+        source = self.directory / "machine.ini"
+        source.write_text(
+            "[DISPLAY]\nOPENMILL_LANGUAGE = en-GB\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(
+            configured_language(environ={"INI_FILE_NAME": str(source)}),
+            "en_GB",
+        )
+
+    def test_system_language_uses_linux_locale(self) -> None:
+        self.assertEqual(
+            configured_language(environ={"OPENMILL_LANGUAGE": "system", "LANG": "fr_FR.UTF-8"}),
+            "fr_FR",
+        )
+
+    def test_specific_catalog_is_loaded_after_its_generic_fallback(self) -> None:
+        self.assertEqual(language_variants("fr-FR"), ("fr", "fr_FR"))
+
+    def test_machine_catalog_overrides_the_packaged_catalog(self) -> None:
+        source = self.directory / "machine.ini"
+        source.write_text("[DISPLAY]\n", encoding="utf-8")
+        directories = translation_directories(environ={"INI_FILE_NAME": str(source)})
+        self.assertEqual(directories[-1], self.directory / "openmill-translations")
 
     def test_report_detects_installed_components_without_importing_them(self) -> None:
         available = {"PySide6", "vtk", "linuxcnc", "qtpyvcp", "probe_basic"}

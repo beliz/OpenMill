@@ -4,6 +4,7 @@ import unittest
 
 from openmill.core.parameter_controls import (
     NumericExpressionError,
+    evaluate_field_expression,
     evaluate_numeric_expression,
     is_calculation_expression,
     normalize_dial_angle,
@@ -24,8 +25,26 @@ class ParameterInteractionTests(unittest.TestCase):
     def test_decimal_comma_is_accepted(self) -> None:
         self.assertEqual(evaluate_numeric_expression("12,5/2"), 6.25)
 
+    def test_tool_diameter_can_be_used_in_a_formula(self) -> None:
+        self.assertEqual(
+            evaluate_numeric_expression("5+tool_diam/2", {"tool_diam": 20}),
+            15,
+        )
+
+    def test_tool_diameter_formula_is_normalized_for_the_field(self) -> None:
+        specification = FieldSpec("offset", "Décalage", 0.0, decimals=2)
+        self.assertEqual(
+            evaluate_field_expression(
+                specification,
+                "5+tool_diam/3",
+                {"tool_diam": 20},
+            ),
+            11.67,
+        )
+
     def test_formula_detection_distinguishes_values_from_calculations(self) -> None:
         self.assertTrue(is_calculation_expression("120/2"))
+        self.assertTrue(is_calculation_expression("tool_diam"))
         self.assertFalse(is_calculation_expression("-60"))
 
     def test_division_by_zero_is_rejected(self) -> None:
@@ -36,6 +55,10 @@ class ParameterInteractionTests(unittest.TestCase):
         for expression in ("__import__('os')", "2**8", "10%3", "value+1"):
             with self.subTest(expression=expression), self.assertRaises(NumericExpressionError):
                 evaluate_numeric_expression(expression)
+
+    def test_unknown_variables_are_rejected(self) -> None:
+        with self.assertRaisesRegex(NumericExpressionError, "Variable inconnue"):
+            evaluate_numeric_expression("tool_diam/2")
 
     def test_angle_controls_increment_by_five_degrees(self) -> None:
         self.assertEqual(recommended_step(FieldSpec("rotation", "Orientation", 0, unit="°")), 5)

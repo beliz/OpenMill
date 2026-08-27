@@ -75,6 +75,25 @@ Les contrôles de paramètres sont eux aussi générés depuis `FieldSpec` :
 
 Les règles de sélection et les incréments sont testés dans le noyau Python, indépendamment de l’interface.
 
+Les expressions sont analysées par `ast` avec une liste blanche stricte : nombres, parenthèses,
+`+`, `-`, `*`, `/` et variables explicitement fournies. `tool_diam` reçoit le diamètre de l’outil
+sélectionné. Le moteur réévalue les expressions juste avant de produire la trajectoire ; une
+formule sauvegardée reste donc liée à la table d’outils et pas seulement à la valeur affichée lors
+de sa saisie.
+
+Les deux colonnes de formulaire ignorent les `sizeHint` horizontaux de leurs contrôles. Un nom
+d’outil long ne peut ainsi plus imposer sa largeur à toute la seconde colonne : les deux cartes
+reçoivent toujours la même part de l’espace lors du redimensionnement.
+
+## Traductions Qt en surcouche
+
+`openmill.integration.i18n` charge des catalogues Qt depuis le paquet, la configuration machine ou
+un chemin explicite. Un plugin de données QtPyVCP peut l’activer pendant l’initialisation de
+`QApplication`, avant le chargement des fenêtres Probe Basic. Cette architecture exploite les
+contextes de traduction des fichiers Qt Designer sans modifier Probe Basic. Les textes dynamiques
+non passés par `tr()` restent identifiés comme une limite upstream et ne sont jamais remplacés par
+une modification opaque de widgets machine.
+
 ## Projet et compatibilité
 
 Le schéma JSON 2 contient le brut, les opérations sans placement et une liste indépendante `repetitions`. Chaque répétition stocke son placement, l’ordre d’exécution choisi et les identifiants des opérations imbriquées. Les projets de schéma 1 sont migrés automatiquement : chaque ancien placement intégré devient un bloc de répétition séparé sans modifier l’identifiant de son opération.

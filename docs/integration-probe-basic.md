@@ -1,6 +1,6 @@
 # Intégrer OpenMill dans Probe Basic
 
-OpenMill 0.5.1 s’intègre comme **onglet utilisateur**, sans modifier le dépôt Probe Basic et sans faire de fork. La même extension fonctionne en simulation et sur une installation LinuxCNC réelle.
+OpenMill 0.9.0 s’intègre comme **onglet utilisateur**, sans modifier le dépôt Probe Basic et sans faire de fork. La même extension fonctionne en simulation et sur une installation LinuxCNC réelle.
 
 > Le chargement du programme et le départ cycle sont volontairement séparés. OpenMill ne démarre jamais une broche, un déplacement ou un programme.
 
@@ -15,7 +15,9 @@ chmod +x installation.sh
 ./installation.sh --ini /chemin/vers/configuration-machine/machine.ini
 ```
 
-L’installateur ne passe pas par `pip`. Il ajoute au Python utilisateur un fichier `.pth` pointant vers `src/`, ce qui évite l’erreur `externally-managed-environment` de Debian et permet de mettre le code à jour avec Git. Il sauvegarde l’INI avant modification, respecte un éventuel `USER_TABS_PATH` existant, installe le splash OpenMill, copie l’onglet et lance le diagnostic simulé.
+L’installateur ne passe pas par `pip`. Il ajoute au Python utilisateur un fichier `.pth` pointant vers `src/`, ce qui évite l’erreur `externally-managed-environment` de Debian et permet de mettre le code à jour avec Git. Il demande le thème Probe Basic d’origine ou OpenMill moderne, sauvegarde l’INI avant modification, respecte un éventuel `USER_TABS_PATH` existant, installe le splash OpenMill, copie l’onglet et lance le diagnostic simulé.
+
+Le choix peut être fourni sans interaction avec `--theme modern` ou `--theme original`. La valeur précédente de `OPENMILL_THEME` est mémorisée et restaurée à la désinstallation.
 
 Commandes complémentaires :
 
@@ -174,7 +176,50 @@ La modernisation globale reste expérimentale. Les composants de rendu VTK/OpenG
 
 Le mode intégré OpenMill est indépendant du thème global. Il applique toujours une feuille locale lisible, réduit les marges et replie le G-code par défaut. Le bouton **Afficher le programme** permet de le développer ponctuellement.
 
-## 6. Charger un programme généré
+## 6. Multilingue sans fork de Probe Basic
+
+Probe Basic et QtPyVCP ne livrent actuellement ni option de langue, ni appel à
+`QTranslator`, ni catalogue `.ts`/`.qm`. Leurs interfaces restent néanmoins des fichiers Qt
+Designer : Qt sait traduire ces textes au chargement si un traducteur est installé avant la
+construction de la fenêtre.
+
+OpenMill fournit donc un chargeur de catalogues indépendant des sources upstream. La langue se
+règle dans l’INI :
+
+```ini
+[DISPLAY]
+OPENMILL_LANGUAGE = fr
+```
+
+La variable d’environnement `OPENMILL_LANGUAGE` est prioritaire. Les valeurs `system` ou `auto`
+reprennent `LC_ALL`, `LC_MESSAGES`, `LANGUAGE` ou `LANG`. Les catalogues sont recherchés sous les
+noms `openmill_fr.qm`, `probe_basic_fr.qm` et `qtpyvcp_fr.qm` :
+
+1. dans les dossiers listés par `OPENMILL_TRANSLATIONS` ;
+2. dans `openmill-translations/`, à côté du fichier INI de la machine ;
+3. dans le paquet OpenMill.
+
+L’onglet OpenMill charge automatiquement les catalogues disponibles. Pour traduire également la
+fenêtre principale de Probe Basic dès sa construction, fusionner le plugin fourni dans le
+`custom_config.yml` de la machine :
+
+```yaml
+data_plugins:
+  openmill_i18n:
+    provider: openmill.integration.i18n:TranslationPlugin
+```
+
+Le fichier prêt à fusionner est `examples/probe_basic/openmill_i18n.yml`. Ce point d’injection est
+le mécanisme d’extension officiel de QtPyVCP : il installe les catalogues après la création de
+`QApplication`, mais avant le chargement du `.ui` Probe Basic. Aucun fichier Python ou `.ui` de
+Probe Basic n’est modifié.
+
+Le socle 0.9.0 rend donc la traduction transparente et versionnable. La constitution d’un
+catalogue français exhaustif reste un travail distinct : les chaînes explicitement marquées
+`notr="true"` dans certains `.ui` et les textes Python construits sans `tr()` devront être traités
+par une petite surcouche ciblée ou corrigés upstream.
+
+## 7. Charger un programme généré
 
 Le bouton **Charger dans Probe Basic** :
 
@@ -197,7 +242,7 @@ OpenMill active également la propriété `syntaxHighlighting` du widget `MAIN` 
 
 Certaines versions de QtPyVCP contiennent également deux impressions de diagnostic accidentelles dans le calcul des limites G-code. Elles produisent dans le terminal une paire `longueur + coordonnées` pour chaque segment et peuvent ralentir fortement le chargement d’un grand fichier. OpenMill désactive uniquement ces deux impressions lorsqu’il détecte exactement la version de code concernée ; les journaux QtPyVCP normaux restent actifs.
 
-## 7. Aperçu des programmes externes
+## 8. Aperçu des programmes externes
 
 OpenMill surveille le programme chargé par LinuxCNC. Lorsqu’un fichier extérieur au conversationnel est ouvert, il construit une scène d’aperçu à partir de :
 
@@ -218,7 +263,7 @@ L’opérateur conserve le contrôle du programme, de l’origine, de l’outil 
 
 Le statut machine expose également l’origine active `G54` à `G59.3`, l’état des références et le programme actuellement chargé. Ces informations préparent la prochaine étape de synchronisation visuelle avec Probe Basic.
 
-## 8. Alternative officielle : fournisseur Python personnalisé
+## 9. Alternative officielle : fournisseur Python personnalisé
 
 Si une installation spécifique ne charge pas correctement les onglets utilisateur, une seconde intégration est fournie :
 
@@ -239,7 +284,7 @@ windows:
 
 Cette variante hérite de `ProbeBasic` et ajoute explicitement OpenMill au `tabWidget` après l’initialisation de la fenêtre principale. Ne pas activer simultanément cette méthode et `USER_TABS_PATH`, sinon l’onglet apparaîtra deux fois.
 
-## 9. Parcours de validation recommandé
+## 10. Parcours de validation recommandé
 
 1. Sous Windows : `python -m openmill.integration.check --smoke-test`.
 2. Exécuter la suite `python -m unittest discover -s tests -v`.

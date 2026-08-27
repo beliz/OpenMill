@@ -15,6 +15,10 @@ readonly SPLASH_MARKER_BEGIN="# BEGIN OPENMILL SPLASH"
 readonly SPLASH_MARKER_END="# END OPENMILL SPLASH"
 readonly SPLASH_PREVIOUS_PREFIX="# OPENMILL_PREVIOUS_INTRO_GRAPHIC = "
 readonly SPLASH_ABSENT="__ABSENT__"
+readonly THEME_MARKER_BEGIN="# BEGIN OPENMILL THEME"
+readonly THEME_MARKER_END="# END OPENMILL THEME"
+readonly THEME_PREVIOUS_PREFIX="# OPENMILL_PREVIOUS_THEME = "
+readonly THEME_ABSENT="__ABSENT__"
 readonly MANAGED_MARKER=".openmill-managed"
 readonly SPLASH_MANAGED_MARKER=".openmill-splash-managed"
 
@@ -23,6 +27,7 @@ INI_FILE=""
 CONFIG_DIR=""
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 STRICT=0
+THEME_CHOICE=""
 
 usage() {
     cat <<'EOF'
@@ -32,6 +37,7 @@ Options :
   --ini CHEMIN         fichier INI LinuxCNC exact
   --config-dir DOSSIER dossier de configuration contenant le fichier INI
   --python COMMANDE    Python utilisé par Probe Basic (défaut : python3)
+  --theme THEME        thème Probe Basic : modern ou original
   --strict             échouer si LinuxCNC, QtPyVCP ou Probe Basic est absent
   --uninstall          raccourci équivalent à l'action uninstall
   -h, --help           afficher cette aide
@@ -65,12 +71,20 @@ while (($#)); do
             PYTHON_BIN="$2"
             shift
             ;;
+        --theme)
+            (($# >= 2)) || die "--theme attend modern ou original."
+            THEME_CHOICE="${2,,}"
+            shift
+            ;;
         --strict) STRICT=1 ;;
         -h|--help) usage; exit 0 ;;
         *) die "Option inconnue : $1" ;;
     esac
     shift
 done
+
+[[ -z "$THEME_CHOICE" || "$THEME_CHOICE" == "modern" || "$THEME_CHOICE" == "original" ]] \
+    || die "Thème inconnu : $THEME_CHOICE (valeurs : modern, original)."
 
 [[ -d "$SOURCE_DIR/openmill" ]] || die "Le dossier src/openmill est introuvable."
 [[ -f "$USER_TAB_SOURCE/openmill.py" && -f "$USER_TAB_SOURCE/openmill.ui" ]] \
@@ -215,6 +229,139 @@ remove_ini_block() {
     chmod --reference="$INI_FILE" "$temporary" 2>/dev/null || true
     mv -- "$temporary" "$INI_FILE"
     success "Déclaration USER_TABS_PATH ajoutée par OpenMill supprimée."
+}
+
+read_openmill_theme() {
+    awk '
+        /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+            line=tolower($0); gsub(/[[:space:]]/, "", line)
+            in_display=(line == "[display]")
+            next
+        }
+        in_display && tolower($0) ~ /^[[:space:]]*openmill_theme[[:space:]]*=/ {
+            value=$0
+            sub(/^[^=]*=[[:space:]]*/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            print tolower(value)
+            exit
+        }
+    ' "$INI_FILE"
+}
+
+choose_theme() {
+    [[ -z "$THEME_CHOICE" ]] || return 0
+    if [[ ! -t 0 ]]; then
+        THEME_CHOICE="modern"
+        return 0
+    fi
+
+    local current default_choice choice
+    current="$(read_openmill_theme)"
+    default_choice="1"
+    [[ "$current" == "original" ]] && default_choice="2"
+    printf '\nThème de l’interface Probe Basic :\n'
+    printf '  1) OpenMill moderne\n'
+    printf '  2) Probe Basic d’origine\n'
+    read -r -p "Choix [${default_choice}] : " choice
+    choice="${choice:-$default_choice}"
+    case "${choice,,}" in
+        1|modern|openmill) THEME_CHOICE="modern" ;;
+        2|original|probe-basic|probe_basic) THEME_CHOICE="original" ;;
+        *) die "Choix de thème invalide : $choice" ;;
+    esac
+}
+
+add_theme_ini_block() {
+    local temporary backup previous
+    temporary="$(mktemp "${INI_FILE}.openmill.XXXXXX")"
+    backup="${INI_FILE}.openmill-backup-theme-$(date +%Y%m%d-%H%M%S)"
+    cp -a -- "$INI_FILE" "$backup"
+
+    if grep -Fq "$THEME_MARKER_BEGIN" "$INI_FILE"; then
+        awk \
+            -v begin="$THEME_MARKER_BEGIN" \
+            -v end="$THEME_MARKER_END" \
+            -v theme="$THEME_CHOICE" '
+            $0 == begin { inside=1; written=0; print; next }
+            inside && tolower($0) ~ /^[[:space:]]*openmill_theme[[:space:]]*=/ {
+                if (!written) print "OPENMILL_THEME = " theme
+                written=1
+                next
+            }
+            $0 == end {
+                if (inside && !written) print "OPENMILL_THEME = " theme
+                inside=0
+                print
+                next
+            }
+            { print }
+        ' "$INI_FILE" > "$temporary"
+    else
+        previous="$(read_openmill_theme)"
+        [[ -n "$previous" ]] || previous="$THEME_ABSENT"
+        if ! awk \
+            -v begin="$THEME_MARKER_BEGIN" \
+            -v end="$THEME_MARKER_END" \
+            -v prefix="$THEME_PREVIOUS_PREFIX" \
+            -v previous="$previous" \
+            -v theme="$THEME_CHOICE" '
+            function insert_block(add_separator) {
+                if (add_separator) print ""
+                print begin
+                print prefix previous
+                print "OPENMILL_THEME = " theme
+                print end
+                inserted=1
+            }
+            /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+                line=tolower($0); gsub(/[[:space:]]/, "", line)
+                if (in_display && !inserted) insert_block(1)
+                in_display=(line == "[display]")
+                if (in_display) found_display=1
+            }
+            in_display && tolower($0) ~ /^[[:space:]]*openmill_theme[[:space:]]*=/ {
+                if (!inserted) insert_block(0)
+                next
+            }
+            { print }
+            END {
+                if (in_display && !inserted) insert_block(1)
+                if (!found_display) exit 42
+            }
+        ' "$INI_FILE" > "$temporary"; then
+            rm -f -- "$temporary"
+            die "Impossible de configurer OPENMILL_THEME dans [DISPLAY]."
+        fi
+    fi
+    chmod --reference="$INI_FILE" "$temporary" 2>/dev/null || true
+    mv -- "$temporary" "$INI_FILE"
+    success "Thème Probe Basic configuré : $THEME_CHOICE (sauvegarde : $backup)."
+}
+
+remove_theme_ini_block() {
+    grep -Fq "$THEME_MARKER_BEGIN" "$INI_FILE" || return 0
+    local temporary
+    temporary="$(mktemp "${INI_FILE}.openmill.XXXXXX")"
+    awk \
+        -v begin="$THEME_MARKER_BEGIN" \
+        -v end="$THEME_MARKER_END" \
+        -v prefix="$THEME_PREVIOUS_PREFIX" \
+        -v absent="$THEME_ABSENT" '
+        $0 == begin { skipping=1; previous=absent; next }
+        skipping && index($0, prefix) == 1 {
+            previous=substr($0, length(prefix) + 1)
+            next
+        }
+        $0 == end {
+            if (previous != absent) print "OPENMILL_THEME = " previous
+            skipping=0
+            next
+        }
+        !skipping { print }
+    ' "$INI_FILE" > "$temporary"
+    chmod --reference="$INI_FILE" "$temporary" 2>/dev/null || true
+    mv -- "$temporary" "$INI_FILE"
+    success "Ancien réglage OPENMILL_THEME restauré."
 }
 
 read_intro_graphic() {
@@ -406,7 +553,7 @@ remove_user_tab() {
 }
 
 run_checks() {
-    local tabs_root="$1" target="$2" failures=0 version_file version splash_target
+    local tabs_root="$1" target="$2" failures=0 version_file version splash_target theme
     info "Vérification de l'installation…"
     [[ -f "$target/openmill.py" && -f "$target/openmill.ui" ]] \
         && success "Onglet utilisateur complet." \
@@ -414,6 +561,13 @@ run_checks() {
     [[ -d "$tabs_root" ]] \
         && success "USER_TABS_PATH résolu : $tabs_root" \
         || { warning "USER_TABS_PATH n'existe pas : $tabs_root"; failures=$((failures + 1)); }
+    theme="$(read_openmill_theme)"
+    if [[ "$theme" == "modern" || "$theme" == "original" ]]; then
+        success "Thème Probe Basic : $theme."
+    else
+        warning "OPENMILL_THEME doit valoir modern ou original."
+        failures=$((failures + 1))
+    fi
     splash_target="${CONFIG_DIR}/${SPLASH_FILENAME}"
     if [[ -f "$splash_target" ]] \
         && awk -v filename="$SPLASH_FILENAME" '
@@ -496,6 +650,8 @@ tab_target="${tabs_root}/openmill"
 
 case "$ACTION" in
     install)
+        choose_theme
+        add_theme_ini_block
         install_python_link
         install_user_tab "$tab_target"
         install_splash
@@ -511,6 +667,7 @@ case "$ACTION" in
         remove_user_tab "$tab_target"
         remove_python_link
         remove_splash
+        remove_theme_ini_block
         remove_ini_block
         success "Désinstallation terminée. Les sauvegardes INI éventuelles sont conservées."
         ;;

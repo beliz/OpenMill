@@ -3,7 +3,16 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 
+from openmill.core.parameter_controls import (
+    NumericExpressionError,
+    evaluate_field_expression,
+    is_calculation_expression,
+    normalize_dial_angle,
+    recommended_step,
+)
+from openmill.core.registry import FieldSpec
 from openmill.ui.qt_core import QEvent, QPointF, QRectF, Qt, pyqtSignal
 from openmill.ui.qt_gui import QColor, QFont, QPainter, QPen
 from openmill.ui.qt_widgets import (
@@ -17,15 +26,6 @@ from openmill.ui.qt_widgets import (
     QWidget,
 )
 
-from openmill.core.parameter_controls import (
-    NumericExpressionError,
-    evaluate_numeric_expression,
-    is_calculation_expression,
-    normalize_dial_angle,
-    recommended_step,
-)
-from openmill.core.registry import FieldSpec
-
 
 class TouchNumberControl(QWidget):
     value_changed = pyqtSignal(object)
@@ -38,18 +38,20 @@ class TouchNumberControl(QWidget):
         parent=None,
         *,
         expression: str = "",
+        variables: Mapping[str, float] | None = None,
     ) -> None:
         super().__init__(parent)
         self._specification = specification
         self._value = self._normalized_value(value)
         self._expression = expression.strip()
+        self._variables = dict(variables or {})
         self._drag_origin = None
         self._drag_value = 0.0
         self._dragging = False
         self._showing_result = True
         self._base_tooltip = (
             "Clique pour saisir une valeur ou un calcul (+, -, *, /, parenthèses). "
-            "Exemple : 120/2. Glisse horizontalement pour ajuster."
+            "Exemple : 120/2 ou 5+tool_diam/2. Glisse horizontalement pour ajuster."
         )
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -104,6 +106,29 @@ class TouchNumberControl(QWidget):
         if changed:
             self.value_changed.emit(self._value)
 
+    def set_variables(self, variables: Mapping[str, float] | None) -> bool:
+        """Update formula variables and recompute the persisted expression."""
+
+        self._variables = dict(variables or {})
+        if not self._expression:
+            return True
+        try:
+            normalized = evaluate_field_expression(
+                self._specification,
+                self._expression,
+                self._variables,
+            )
+        except NumericExpressionError as error:
+            self._set_error(str(error))
+            return False
+        self._set_error()
+        changed = not math.isclose(float(self._value), float(normalized), abs_tol=1e-12)
+        self._value = normalized
+        self._show_editable_value() if self._field.hasFocus() else self._show_display_value()
+        if changed:
+            self.value_changed.emit(self._value)
+        return True
+
     def _adjust(self, direction: int) -> None:
         step = recommended_step(self._specification)
         self.set_value(float(self._value) + direction * step)
@@ -155,16 +180,7 @@ class TouchNumberControl(QWidget):
         if unit and raw.endswith(unit):
             raw = raw[: -len(unit)].strip()
         try:
-            result = evaluate_numeric_expression(raw)
-            if not self._specification.minimum <= result <= self._specification.maximum:
-                raise NumericExpressionError(
-                    f"Le résultat doit être compris entre {self._specification.minimum:g} "
-                    f"et {self._specification.maximum:g}."
-                )
-            if self._specification.kind == "int" and not math.isclose(
-                result, round(result), abs_tol=1e-9
-            ):
-                raise NumericExpressionError("Ce champ attend un nombre entier.")
+            result = evaluate_field_expression(self._specification, raw, self._variables)
         except NumericExpressionError as error:
             self._set_error(str(error))
             self._show_display_value()
@@ -215,13 +231,19 @@ class PercentageControl(QWidget):
         parent=None,
         *,
         expression: str = "",
+        variables: Mapping[str, float] | None = None,
     ) -> None:
         super().__init__(parent)
         self._updating = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(7)
-        self._number = TouchNumberControl(specification, value, expression=expression)
+        self._number = TouchNumberControl(
+            specification,
+            value,
+            expression=expression,
+            variables=variables,
+        )
         self._number.value_changed.connect(self._number_changed)
         self._number.expression_changed.connect(self.expression_changed.emit)
         layout.addWidget(self._number)
@@ -235,6 +257,9 @@ class PercentageControl(QWidget):
         self._slider.setValue(round(float(value) * 10))
         self._slider.valueChanged.connect(self._slider_changed)
         layout.addWidget(self._slider)
+
+    def set_variables(self, variables: Mapping[str, float] | None) -> bool:
+        return self._number.set_variables(variables)
 
     def _number_changed(self, value) -> None:
         if self._updating:
@@ -337,6 +362,7 @@ class AngleControl(QWidget):
         parent=None,
         *,
         expression: str = "",
+        variables: Mapping[str, float] | None = None,
     ) -> None:
         super().__init__(parent)
         self._updating = False
@@ -346,10 +372,18 @@ class AngleControl(QWidget):
         self._dial = AngleDial(specification, value)
         self._dial.angle_changed.connect(self._dial_changed)
         layout.addWidget(self._dial)
-        self._number = TouchNumberControl(specification, value, expression=expression)
+        self._number = TouchNumberControl(
+            specification,
+            value,
+            expression=expression,
+            variables=variables,
+        )
         self._number.value_changed.connect(self._number_changed)
         self._number.expression_changed.connect(self.expression_changed.emit)
         layout.addWidget(self._number)
+
+    def set_variables(self, variables: Mapping[str, float] | None) -> bool:
+        return self._number.set_variables(variables)
 
     def _dial_changed(self, value: float) -> None:
         if self._updating:

@@ -2,7 +2,7 @@
 
 Atelier conversationnel de fraisage CNC, pensé pour être développé sous **Windows**, utilisé avec **LinuxCNC**, puis intégré proprement dans **Probe Basic / QtPyVCP**.
 
-**Version 0.8.0 — interface de préparation simplifiée et version visible.**
+**Version 0.9.0 — formules liées à l’outil, installateur guidé et socle multilingue.**
 
 L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d’usinage, les opérations, les aperçus et la connexion machine sont séparés. Le même `QWidget` peut fonctionner comme application autonome ou devenir un onglet d’une interface LinuxCNC.
 
@@ -34,10 +34,11 @@ L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d�
 - Galerie tactile d’opérations illustrées, classées par famille et recherchables.
 - Réglages tactiles +/−, valeurs ajustables par glissement, faders et sélecteurs d’angle circulaires.
 - Calculs persistants dans les paramètres (`120/2`, `40+5`, `12*3`), restaurés au prochain clic.
+- Variable `tool_diam` utilisable dans les formules, par exemple `5+tool_diam/2`, et recalculée après un changement d’outil ou de table d’outils.
 - Paramètres et trajectoires mis à jour immédiatement.
 - Projets multi-opérations, réorganisation, désactivation et duplication.
 - Export de programmes `.ngc` et sauvegarde JSON versionnée.
-- Interface intégralement en français, bibliothèque d’outils simulée et adaptateur LinuxCNC séparé.
+- Interface française, langue configurable et chargeur de catalogues Qt pour OpenMill, QtPyVCP et Probe Basic sans modifier leurs sources.
 - Onglet Probe Basic automatique avec `USER_TABS_PATH`, sans fork ni modification upstream.
 - Splash de démarrage OpenMill moderne, installé automatiquement et restauré proprement à la désinstallation.
 - Compatibilité avec les environnements Probe Basic PyQt5 et PySide6.
@@ -65,7 +66,8 @@ L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d�
 - Mode préparation pleine fenêtre : le jog latéral et les commandes machine inférieures de Probe Basic sont masqués uniquement pendant l’édition conversationnelle.
 - Bandeau OpenMill supprimé : nom de pièce et version regroupés au-dessus du brut dans la colonne gauche.
 - Thème Probe Basic piloté uniquement par `OPENMILL_THEME` dans la configuration, sans interrupteur dans l’interface.
-- Formulaires larges sur deux colonnes, placés avant un aperçu de contrôle moins envahissant.
+- Choix guidé du thème Probe Basic d’origine ou OpenMill moderne pendant l’installation.
+- Formulaires larges sur deux colonnes strictement égales, y compris après redimensionnement et avec de longs noms d’outils.
 - Extensions d’opérations installables indépendamment via les entry points Python.
 - Tests métier sans Qt, VTK ni LinuxCNC ; CI GitHub Windows et Linux.
 
@@ -135,7 +137,7 @@ chmod +x installation.sh
 ./installation.sh --ini ~/linuxcnc/configs/ma-machine/ma-machine.ini
 ```
 
-Le script :
+Le script demande d’abord si Probe Basic doit conserver son thème d’origine ou utiliser le thème OpenMill moderne, puis :
 
 1. vérifie le dépôt, le Python choisi et la section `[DISPLAY]` du fichier INI ;
 2. relie `src/openmill` au Python utilisateur avec un fichier `.pth`, sans `pip`, sans `sudo` et sans contourner PEP 668 ;
@@ -144,6 +146,13 @@ Le script :
 5. installe le splash OpenMill et remplace réversiblement `INTRO_GRAPHIC` ;
 6. copie `openmill.py` et `openmill.ui` dans le dossier d’onglets de la configuration ;
 7. vérifie l’import Python et exécute une génération/charge simulée complète.
+
+Pour une installation automatisée sans question interactive :
+
+```bash
+./installation.sh --theme modern --ini ~/linuxcnc/configs/ma-machine/ma-machine.ini
+# ou : --theme original
+```
 
 Si plusieurs configurations sont détectées, le script propose une liste. Le chemin peut aussi être donné sous forme de dossier :
 

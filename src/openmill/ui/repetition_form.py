@@ -2,17 +2,6 @@
 
 from __future__ import annotations
 
-from openmill.ui.qt_core import Qt, pyqtSignal
-from openmill.ui.qt_widgets import (
-    QFrame,
-    QGridLayout,
-    QLabel,
-    QScrollArea,
-    QScroller,
-    QVBoxLayout,
-    QWidget,
-)
-
 from openmill.core.models import PlacementMode, RepetitionBlock, RepetitionOrder
 from openmill.core.parameter_controls import uses_angle_dial, uses_percentage_slider
 from openmill.core.registry import FieldSpec
@@ -23,6 +12,17 @@ from openmill.ui.parameter_controls import (
     TouchNumberControl,
 )
 from openmill.ui.placement_fields import EXECUTION_ORDER, PLACEMENT_FIELDS, PLACEMENT_MODE
+from openmill.ui.qt_core import Qt, pyqtSignal
+from openmill.ui.qt_widgets import (
+    QFrame,
+    QGridLayout,
+    QLabel,
+    QScrollArea,
+    QScroller,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class RepetitionForm(QWidget):
@@ -106,6 +106,8 @@ class RepetitionForm(QWidget):
     def _card(self, specification: FieldSpec, control: QWidget) -> QFrame:
         card = QFrame()
         card.setObjectName("parameterCard")
+        card.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        control.setSizePolicy(QSizePolicy.Ignored, control.sizePolicy().verticalPolicy())
         layout = QVBoxLayout(card)
         layout.setContentsMargins(11, 9, 11, 10)
         layout.setSpacing(6)
