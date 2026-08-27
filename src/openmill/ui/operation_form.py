@@ -16,7 +16,7 @@ from openmill.ui.qt_widgets import (
 )
 
 from openmill.adapters.base import MachineAdapter
-from openmill.core.models import OperationRecord
+from openmill.core.models import OperationRecord, PlacementMode
 from openmill.core.parameter_controls import uses_angle_dial, uses_percentage_slider
 from openmill.core.registry import FieldSpec, registry
 from openmill.ui.parameter_controls import (
@@ -44,6 +44,11 @@ class OperationForm(QWidget):
         self._description.setWordWrap(True)
         self._description.setObjectName("muted")
         layout.addWidget(self._description)
+        calculation_hint = QLabel(
+            "Astuce · calculs acceptés : 120/2, 40+5, 12*3 et parenthèses."
+        )
+        calculation_hint.setObjectName("muted")
+        layout.addWidget(calculation_hint)
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -104,11 +109,24 @@ class OperationForm(QWidget):
             wide = (
                 specification.kind == "choice" and len(specification.choices) >= 3
             ) or uses_angle_dial(specification)
+            placement_driven = (
+                specification.key in {"center_x", "center_y"}
+                and operation.placement.mode is not PlacementMode.SINGLE
+            )
+            control = self._create_field(specification, operation)
+            if placement_driven:
+                control.setEnabled(False)
             self._add_parameter(
                 specification.label,
-                self._create_field(specification, operation),
-                specification.tip,
+                control,
+                (
+                    f"Piloté par le bloc {operation.placement.label}. "
+                    "La coordonnée de l’opération n’est pas utilisée."
+                    if placement_driven
+                    else specification.tip
+                ),
                 wide=wide,
+                disabled=placement_driven,
             )
         self._finish_grid_row()
         self._form.setRowStretch(self._grid_row, 1)
@@ -128,6 +146,7 @@ class OperationForm(QWidget):
         tip: str = "",
         *,
         wide: bool = False,
+        disabled: bool = False,
     ) -> None:
         card = QFrame()
         card.setObjectName("parameterCard")
@@ -141,6 +160,9 @@ class OperationForm(QWidget):
             control.setToolTip(tip)
         layout.addWidget(heading)
         layout.addWidget(control)
+        if disabled:
+            card.setProperty("placementDriven", True)
+            card.setToolTip(tip)
         if wide:
             self._finish_grid_row()
             self._form.addWidget(card, self._grid_row, 0, 1, 2)
@@ -163,18 +185,32 @@ class OperationForm(QWidget):
             specification,
             value,
             lambda current, key=specification.key: self._parameter_changed(key, current),
+            expression=operation.expressions.get(specification.key, ""),
+            expression_callback=lambda current, key=specification.key: self._expression_changed(
+                key, current
+            ),
         )
 
-    def _create_control(self, specification: FieldSpec, value, callback) -> QWidget:
+    def _create_control(
+        self,
+        specification: FieldSpec,
+        value,
+        callback,
+        *,
+        expression: str = "",
+        expression_callback=None,
+    ) -> QWidget:
         if specification.kind == "choice":
             field = SegmentedChoice(specification, value)
         elif uses_angle_dial(specification):
-            field = AngleControl(specification, float(value))
+            field = AngleControl(specification, float(value), expression=expression)
         elif uses_percentage_slider(specification):
-            field = PercentageControl(specification, float(value))
+            field = PercentageControl(specification, float(value), expression=expression)
         else:
-            field = TouchNumberControl(specification, value)
+            field = TouchNumberControl(specification, value, expression=expression)
         field.value_changed.connect(callback)
+        if expression_callback is not None and hasattr(field, "expression_changed"):
+            field.expression_changed.connect(expression_callback)
         if specification.tip:
             field.setToolTip(specification.tip)
         return field
@@ -193,3 +229,12 @@ class OperationForm(QWidget):
         if self._operation is not None and not self._loading:
             self._operation.parameters[key] = value
             self.operation_changed.emit()
+
+    def _expression_changed(self, key: str, expression: str) -> None:
+        if self._operation is None or self._loading:
+            return
+        if expression:
+            self._operation.expressions[key] = expression
+        else:
+            self._operation.expressions.pop(key, None)
+        self.operation_changed.emit()

@@ -2,7 +2,7 @@
 
 Atelier conversationnel de fraisage CNC, pensé pour être développé sous **Windows**, utilisé avec **LinuxCNC**, puis intégré proprement dans **Probe Basic / QtPyVCP**.
 
-**Version 0.7.0 — répétitions hiérarchiques et espace conversationnel pleine fenêtre.**
+**Version 0.7.1 — répétitions fiabilisées et champs de paramètres calculables.**
 
 L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d’usinage, les opérations, les aperçus et la connexion machine sont séparés. Le même `QWidget` peut fonctionner comme application autonome ou devenir un onglet d’une interface LinuxCNC.
 
@@ -23,7 +23,9 @@ L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d�
 - Blocs de répétition indépendants : `Unique`, `Ligne`, `Grille` ou `Cercle`, contenant une ou plusieurs opérations.
 - Ordre d’usinage choisi pour chaque bloc : toutes les opérations par position ou chaque opération sur toutes les positions.
 - Arbre de programme hiérarchique, avec déplacement des opérations entre les répétitions.
+- Synchronisation garantie du modèle après chaque glisser-déposer et refus des imbrications invalides.
 - Répétition applicable à toutes les géométries, avec rotation optionnelle des opérations sur le motif.
+- Coordonnées d’opération grisées lorsqu’un bloc Ligne, Grille ou Cercle pilote leur position.
 - Migration automatique des projets 0.6.0 dont la répétition était encore intégrée à chaque opération.
 - Brut rectangulaire configurable, origine au coin ou au centre.
 - Aperçus interactifs dessus `XY`, face `XZ`, côté `YZ`.
@@ -31,6 +33,7 @@ L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d�
 - Lecture animée de la trajectoire, curseur de progression, vitesse, passes Z et coloration type slicer.
 - Galerie tactile d’opérations illustrées, classées par famille et recherchables.
 - Réglages tactiles +/−, valeurs ajustables par glissement, faders et sélecteurs d’angle circulaires.
+- Calculs persistants dans les paramètres (`120/2`, `40+5`, `12*3`), restaurés au prochain clic.
 - Paramètres et trajectoires mis à jour immédiatement.
 - Projets multi-opérations, réorganisation, désactivation et duplication.
 - Export de programmes `.ngc` et sauvegarde JSON versionnée.

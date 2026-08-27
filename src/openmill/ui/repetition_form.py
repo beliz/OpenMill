@@ -43,6 +43,11 @@ class RepetitionForm(QWidget):
         self._description.setWordWrap(True)
         self._description.setObjectName("muted")
         layout.addWidget(self._description)
+        calculation_hint = QLabel(
+            "Astuce · calculs acceptés : 120/2, 40+5, 12*3 et parenthèses."
+        )
+        calculation_hint.setObjectName("muted")
+        layout.addWidget(calculation_hint)
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -113,16 +118,26 @@ class RepetitionForm(QWidget):
         layout.addWidget(control)
         return card
 
-    def _control(self, specification: FieldSpec, value, callback) -> QWidget:
+    def _control(
+        self,
+        specification: FieldSpec,
+        value,
+        callback,
+        *,
+        expression: str = "",
+        expression_callback=None,
+    ) -> QWidget:
         if specification.kind == "choice":
             field = SegmentedChoice(specification, value)
         elif uses_angle_dial(specification):
-            field = AngleControl(specification, float(value))
+            field = AngleControl(specification, float(value), expression=expression)
         elif uses_percentage_slider(specification):
-            field = PercentageControl(specification, float(value))
+            field = PercentageControl(specification, float(value), expression=expression)
         else:
-            field = TouchNumberControl(specification, value)
+            field = TouchNumberControl(specification, value, expression=expression)
         field.value_changed.connect(callback)
+        if expression_callback is not None and hasattr(field, "expression_changed"):
+            field.expression_changed.connect(expression_callback)
         return field
 
     def _placement_control(self, specification: FieldSpec, repetition: RepetitionBlock) -> QWidget:
@@ -135,6 +150,10 @@ class RepetitionForm(QWidget):
             specification,
             value,
             lambda current, key=specification.key: self._placement_changed(key, current),
+            expression=repetition.expressions.get(specification.key, ""),
+            expression_callback=lambda current, key=specification.key: self._expression_changed(
+                key, current
+            ),
         )
 
     def _order_control(self, repetition: RepetitionBlock) -> QWidget:
@@ -163,4 +182,13 @@ class RepetitionForm(QWidget):
         repetition = self._repetition
         if key == "mode":
             self.set_repetition(repetition)
+        self.repetition_changed.emit()
+
+    def _expression_changed(self, key: str, expression: str) -> None:
+        if self._repetition is None or self._loading:
+            return
+        if expression:
+            self._repetition.expressions[key] = expression
+        else:
+            self._repetition.expressions.pop(key, None)
         self.repetition_changed.emit()

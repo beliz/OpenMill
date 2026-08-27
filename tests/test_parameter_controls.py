@@ -3,6 +3,9 @@ from __future__ import annotations
 import unittest
 
 from openmill.core.parameter_controls import (
+    NumericExpressionError,
+    evaluate_numeric_expression,
+    is_calculation_expression,
     normalize_dial_angle,
     recommended_step,
     uses_angle_dial,
@@ -12,6 +15,28 @@ from openmill.core.registry import FieldSpec
 
 
 class ParameterInteractionTests(unittest.TestCase):
+    def test_basic_arithmetic_expressions_are_evaluated(self) -> None:
+        self.assertEqual(evaluate_numeric_expression("120/2"), 60)
+        self.assertEqual(evaluate_numeric_expression("40+5"), 45)
+        self.assertEqual(evaluate_numeric_expression("12*3"), 36)
+        self.assertEqual(evaluate_numeric_expression("(20-5)*2"), 30)
+
+    def test_decimal_comma_is_accepted(self) -> None:
+        self.assertEqual(evaluate_numeric_expression("12,5/2"), 6.25)
+
+    def test_formula_detection_distinguishes_values_from_calculations(self) -> None:
+        self.assertTrue(is_calculation_expression("120/2"))
+        self.assertFalse(is_calculation_expression("-60"))
+
+    def test_division_by_zero_is_rejected(self) -> None:
+        with self.assertRaises(NumericExpressionError):
+            evaluate_numeric_expression("120/0")
+
+    def test_python_code_and_unsupported_operators_are_rejected(self) -> None:
+        for expression in ("__import__('os')", "2**8", "10%3", "value+1"):
+            with self.subTest(expression=expression), self.assertRaises(NumericExpressionError):
+                evaluate_numeric_expression(expression)
+
     def test_angle_controls_increment_by_five_degrees(self) -> None:
         self.assertEqual(recommended_step(FieldSpec("rotation", "Orientation", 0, unit="°")), 5)
 

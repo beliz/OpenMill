@@ -116,7 +116,7 @@ QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
     border-color: #57d7a8;
 }
 QLineEdit#operationSearch { font-size: 13px; padding-left: 13px; border-radius: 9px; }
-QSpinBox#scrubValue, QDoubleSpinBox#scrubValue {
+QLineEdit#scrubValue, QSpinBox#scrubValue, QDoubleSpinBox#scrubValue {
     background-color: #0b131e;
     color: #e9f3fb;
     font-size: 13px;
@@ -124,6 +124,19 @@ QSpinBox#scrubValue, QDoubleSpinBox#scrubValue {
     border: 1px solid #2c3e54;
     border-radius: 8px;
     padding: 0 5px;
+}
+QLineEdit#scrubValue[expressionError="true"] {
+    border-color: #ff7383;
+    color: #ffb3bd;
+}
+QFrame#parameterCard[placementDriven="true"] {
+    background-color: #0d1420;
+    border-color: #172231;
+}
+QFrame#parameterCard[placementDriven="true"] QLabel,
+QFrame#parameterCard[placementDriven="true"] QLineEdit,
+QFrame#parameterCard[placementDriven="true"] QPushButton {
+    color: #5f6d80;
 }
 QSlider#touchFader::groove:horizontal {
     background: #25354a;

@@ -190,8 +190,10 @@ class OperationRecord:
     placement: Placement = field(default_factory=Placement)
     enabled: bool = True
     uid: str = field(default_factory=lambda: uuid4().hex)
+    expressions: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        self.expressions = dict(self.expressions or {})
         if isinstance(self.placement, dict):
             self.placement = Placement(**self.placement)
 
@@ -201,6 +203,7 @@ class OperationRecord:
             title=f"{self.title} — copie",
             tool_number=self.tool_number,
             parameters=dict(self.parameters),
+            expressions=dict(self.expressions),
             placement=replace(self.placement),
             enabled=self.enabled,
         )
@@ -215,8 +218,10 @@ class RepetitionBlock:
     execution_order: RepetitionOrder = RepetitionOrder.BY_POSITION
     enabled: bool = True
     uid: str = field(default_factory=lambda: uuid4().hex)
+    expressions: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        self.expressions = dict(self.expressions or {})
         if isinstance(self.placement, dict):
             self.placement = Placement(**self.placement)
         self.execution_order = RepetitionOrder(self.execution_order)
@@ -229,6 +234,7 @@ class RepetitionBlock:
         return RepetitionBlock(
             operation_uids=operation_uids,
             placement=replace(self.placement),
+            expressions=dict(self.expressions),
             execution_order=self.execution_order,
             enabled=self.enabled,
         )

@@ -57,6 +57,19 @@ class PlacementTests(unittest.TestCase):
         operation_payload = payload.split('"operations":', 1)[1].split('"repetitions":', 1)[0]
         self.assertNotIn('"placement":', operation_payload)
 
+    def test_parameter_expressions_survive_project_roundtrip(self) -> None:
+        operation = self.operation()
+        operation.parameters["center_x"] = 60
+        operation.expressions["center_x"] = "120/2"
+        project = Project(stock=self.stock, operations=[operation])
+        project.repetitions[0].placement.diameter = 60
+        project.repetitions[0].expressions["diameter"] = "120/2"
+
+        restored = loads_project(dumps_project(project))
+
+        self.assertEqual(restored.operations[0].expressions["center_x"], "120/2")
+        self.assertEqual(restored.repetitions[0].expressions["diameter"], "120/2")
+
     def test_schema_one_pattern_is_migrated_to_a_repetition_block(self) -> None:
         restored = loads_project(
             '{"schema_version":1,"operations":[{"plugin_id":"drill_single",'

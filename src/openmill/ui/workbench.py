@@ -59,6 +59,29 @@ def _panel() -> QFrame:
     return panel
 
 
+class ProgramTreeWidget(QTreeWidget):
+    """Program tree that always publishes completed internal moves."""
+
+    program_reordered = pyqtSignal()
+
+    def dropEvent(self, event) -> None:
+        dragged = self.currentItem()
+        position = event.position().toPoint() if hasattr(event, "position") else event.pos()
+        target = self.itemAt(position)
+        if dragged is not None and dragged.data(0, ITEM_KIND_ROLE) == "repetition":
+            invalid_parent = target is not None and target.parent() is not None
+            indicator_type = getattr(QAbstractItemView, "DropIndicatorPosition", QAbstractItemView)
+            invalid_nesting = (
+                target is not None
+                and self.dropIndicatorPosition() == indicator_type.OnItem
+            )
+            if invalid_parent or invalid_nesting:
+                event.ignore()
+                return
+        super().dropEvent(event)
+        self.program_reordered.emit()
+
+
 class ConversationalWorkbench(QWidget):
     """Reusable QWidget: standalone application and future Probe Basic tab."""
 
@@ -197,14 +220,14 @@ class ConversationalWorkbench(QWidget):
         operations_label = QLabel("PROGRAMME")
         operations_label.setObjectName("section")
         layout.addWidget(operations_label)
-        self._program_tree = QTreeWidget()
+        self._program_tree = ProgramTreeWidget()
         self._program_tree.setHeaderHidden(True)
         self._program_tree.setIndentation(18)
         self._program_tree.setDragDropMode(QAbstractItemView.InternalMove)
         self._program_tree.setSelectionMode(QAbstractItemView.SingleSelection)
         self._program_tree.currentItemChanged.connect(self._selection_changed)
         self._program_tree.itemChanged.connect(self._program_item_changed)
-        self._program_tree.model().rowsMoved.connect(self._program_rows_moved)
+        self._program_tree.program_reordered.connect(self._program_rows_moved)
         layout.addWidget(self._program_tree, 1)
 
         add = QPushButton("＋  Ajouter une opération")

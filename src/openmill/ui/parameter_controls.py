@@ -4,34 +4,53 @@ from __future__ import annotations
 
 import math
 
-from openmill.ui.qt_core import QEvent, QPointF, QRectF, Qt, QLocale, pyqtSignal
+from openmill.ui.qt_core import QEvent, QPointF, QRectF, Qt, pyqtSignal
 from openmill.ui.qt_gui import QColor, QFont, QPainter, QPen
 from openmill.ui.qt_widgets import (
-    QAbstractSpinBox,
     QButtonGroup,
-    QDoubleSpinBox,
     QHBoxLayout,
+    QLineEdit,
     QPushButton,
     QSizePolicy,
     QSlider,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
-from openmill.core.parameter_controls import normalize_dial_angle, recommended_step
+from openmill.core.parameter_controls import (
+    NumericExpressionError,
+    evaluate_numeric_expression,
+    is_calculation_expression,
+    normalize_dial_angle,
+    recommended_step,
+)
 from openmill.core.registry import FieldSpec
 
 
 class TouchNumberControl(QWidget):
     value_changed = pyqtSignal(object)
+    expression_changed = pyqtSignal(str)
 
-    def __init__(self, specification: FieldSpec, value, parent=None) -> None:
+    def __init__(
+        self,
+        specification: FieldSpec,
+        value,
+        parent=None,
+        *,
+        expression: str = "",
+    ) -> None:
         super().__init__(parent)
         self._specification = specification
+        self._value = self._normalized_value(value)
+        self._expression = expression.strip()
         self._drag_origin = None
         self._drag_value = 0.0
         self._dragging = False
+        self._showing_result = True
+        self._base_tooltip = (
+            "Clique pour saisir une valeur ou un calcul (+, -, *, /, parenthèses). "
+            "Exemple : 120/2. Glisse horizontalement pour ajuster."
+        )
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(7)
@@ -46,28 +65,17 @@ class TouchNumberControl(QWidget):
         minus.clicked.connect(lambda: self._adjust(-1))
         layout.addWidget(minus)
 
-        if specification.kind == "int":
-            self._field = QSpinBox()
-            self._field.setRange(int(specification.minimum), int(specification.maximum))
-            self._field.setSingleStep(int(recommended_step(specification)))
-            self._field.setValue(int(value))
-        else:
-            self._field = QDoubleSpinBox()
-            self._field.setLocale(QLocale(QLocale.French, QLocale.France))
-            self._field.setDecimals(specification.decimals)
-            self._field.setRange(specification.minimum, specification.maximum)
-            self._field.setSingleStep(recommended_step(specification))
-            self._field.setValue(float(value))
+        self._field = QLineEdit()
         self._field.setObjectName("scrubValue")
-        self._field.setButtonSymbols(QAbstractSpinBox.NoButtons)
         self._field.setAlignment(Qt.AlignCenter)
         self._field.setMinimumHeight(40)
         self._field.setMinimumWidth(85)
-        self._field.lineEdit().installEventFilter(self)
-        self._field.lineEdit().setToolTip("Glisse horizontalement pour ajuster la valeur, ou clique pour la saisir.")
-        if specification.unit:
-            self._field.setSuffix(f" {specification.unit}")
-        self._field.valueChanged.connect(lambda current: self.value_changed.emit(current))
+        self._field.setAccessibleName(specification.label)
+        self._field.installEventFilter(self)
+        self._field.setToolTip(self._base_tooltip)
+        self._field.textEdited.connect(self._editing_started)
+        self._field.editingFinished.connect(self._commit_text)
+        self._show_display_value()
         layout.addWidget(self._field, 1)
 
         plus = QPushButton("+")
@@ -81,16 +89,100 @@ class TouchNumberControl(QWidget):
         layout.addWidget(plus)
 
     def value(self):
-        return self._field.value()
+        return self._value
 
-    def set_value(self, value) -> None:
-        self._field.setValue(int(value) if self._specification.kind == "int" else float(value))
+    def expression(self) -> str:
+        return self._expression
+
+    def set_value(self, value, *, clear_expression: bool = True) -> None:
+        normalized = self._normalized_value(value)
+        changed = not math.isclose(float(self._value), float(normalized), abs_tol=1e-12)
+        self._value = normalized
+        if clear_expression:
+            self._set_expression("")
+        self._show_editable_value() if self._field.hasFocus() else self._show_display_value()
+        if changed:
+            self.value_changed.emit(self._value)
 
     def _adjust(self, direction: int) -> None:
-        self._field.stepBy(direction)
+        step = recommended_step(self._specification)
+        self.set_value(float(self._value) + direction * step)
+
+    def _normalized_value(self, value):
+        bounded = min(self._specification.maximum, max(self._specification.minimum, float(value)))
+        if self._specification.kind == "int":
+            return int(round(bounded))
+        return round(bounded, self._specification.decimals)
+
+    def _editable_value(self) -> str:
+        if self._specification.kind == "int":
+            return str(int(self._value))
+        return f"{float(self._value):.{self._specification.decimals}f}".replace(".", ",")
+
+    def _display_value(self) -> str:
+        suffix = f" {self._specification.unit}" if self._specification.unit else ""
+        return f"{self._editable_value()}{suffix}"
+
+    def _show_editable_value(self) -> None:
+        self._showing_result = False
+        self._field.setText(self._expression or self._editable_value())
+
+    def _show_display_value(self) -> None:
+        self._showing_result = True
+        self._field.setText(self._display_value())
+
+    def _editing_started(self, _text: str) -> None:
+        self._showing_result = False
+
+    def _set_expression(self, expression: str) -> None:
+        expression = expression.strip()
+        if expression == self._expression:
+            return
+        self._expression = expression
+        self.expression_changed.emit(expression)
+
+    def _set_error(self, message: str = "") -> None:
+        self._field.setProperty("expressionError", bool(message))
+        self._field.setToolTip(message or self._base_tooltip)
+        self._field.style().unpolish(self._field)
+        self._field.style().polish(self._field)
+
+    def _commit_text(self) -> None:
+        if self._showing_result:
+            return
+        raw = self._field.text().strip()
+        unit = self._specification.unit
+        if unit and raw.endswith(unit):
+            raw = raw[: -len(unit)].strip()
+        try:
+            result = evaluate_numeric_expression(raw)
+            if not self._specification.minimum <= result <= self._specification.maximum:
+                raise NumericExpressionError(
+                    f"Le résultat doit être compris entre {self._specification.minimum:g} "
+                    f"et {self._specification.maximum:g}."
+                )
+            if self._specification.kind == "int" and not math.isclose(
+                result, round(result), abs_tol=1e-9
+            ):
+                raise NumericExpressionError("Ce champ attend un nombre entier.")
+        except NumericExpressionError as error:
+            self._set_error(str(error))
+            self._show_display_value()
+            return
+        self._set_error()
+        expression = raw if is_calculation_expression(raw) else ""
+        self._set_expression(expression)
+        normalized = self._normalized_value(result)
+        changed = not math.isclose(float(self._value), float(normalized), abs_tol=1e-12)
+        self._value = normalized
+        self._show_display_value()
+        if changed:
+            self.value_changed.emit(self._value)
 
     def eventFilter(self, watched, event) -> bool:
-        if watched is self._field.lineEdit():
+        if watched is self._field:
+            if event.type() == QEvent.FocusIn:
+                self._show_editable_value()
             if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
                 self._drag_origin = event.globalPos()
                 self._drag_value = float(self.value())
@@ -99,7 +191,7 @@ class TouchNumberControl(QWidget):
                 delta = event.globalPos().x() - self._drag_origin.x()
                 if abs(delta) > 5 or self._dragging:
                     self._dragging = True
-                    self._field.lineEdit().setCursor(Qt.SizeHorCursor)
+                    self._field.setCursor(Qt.SizeHorCursor)
                     increment = recommended_step(self._specification) * delta / 9
                     self.set_value(self._drag_value + increment)
                     return True
@@ -107,22 +199,31 @@ class TouchNumberControl(QWidget):
                 consumed = self._dragging
                 self._drag_origin = None
                 self._dragging = False
-                self._field.lineEdit().unsetCursor()
+                self._field.unsetCursor()
                 return consumed
         return super().eventFilter(watched, event)
 
 
 class PercentageControl(QWidget):
     value_changed = pyqtSignal(object)
+    expression_changed = pyqtSignal(str)
 
-    def __init__(self, specification: FieldSpec, value: float, parent=None) -> None:
+    def __init__(
+        self,
+        specification: FieldSpec,
+        value: float,
+        parent=None,
+        *,
+        expression: str = "",
+    ) -> None:
         super().__init__(parent)
         self._updating = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(7)
-        self._number = TouchNumberControl(specification, value)
+        self._number = TouchNumberControl(specification, value, expression=expression)
         self._number.value_changed.connect(self._number_changed)
+        self._number.expression_changed.connect(self.expression_changed.emit)
         layout.addWidget(self._number)
 
         self._slider = QSlider(Qt.Horizontal)
@@ -227,8 +328,16 @@ class AngleDial(QWidget):
 
 class AngleControl(QWidget):
     value_changed = pyqtSignal(object)
+    expression_changed = pyqtSignal(str)
 
-    def __init__(self, specification: FieldSpec, value: float, parent=None) -> None:
+    def __init__(
+        self,
+        specification: FieldSpec,
+        value: float,
+        parent=None,
+        *,
+        expression: str = "",
+    ) -> None:
         super().__init__(parent)
         self._updating = False
         layout = QVBoxLayout(self)
@@ -237,8 +346,9 @@ class AngleControl(QWidget):
         self._dial = AngleDial(specification, value)
         self._dial.angle_changed.connect(self._dial_changed)
         layout.addWidget(self._dial)
-        self._number = TouchNumberControl(specification, value)
+        self._number = TouchNumberControl(specification, value, expression=expression)
         self._number.value_changed.connect(self._number_changed)
+        self._number.expression_changed.connect(self.expression_changed.emit)
         layout.addWidget(self._number)
 
     def _dial_changed(self, value: float) -> None:
