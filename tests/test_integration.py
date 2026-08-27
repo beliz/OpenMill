@@ -70,7 +70,10 @@ class IntegrationBridgeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix="openmill-integration-")
         self.addCleanup(self.temporary.cleanup)
-        self.directory = Path(self.temporary.name)
+        # Windows runners expose the same temporary directory through both a
+        # short 8.3 path and its long canonical path.  Production code
+        # deliberately resolves paths before handing them to LinuxCNC.
+        self.directory = Path(self.temporary.name).resolve()
         self.program = self.directory / "part.ngc"
         self.program.write_text("%\nG90\nM30\n%\n", encoding="utf-8")
         self.status = FakeStatus()
@@ -182,7 +185,7 @@ class RuntimeDiscoveryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix="openmill-runtime-")
         self.addCleanup(self.temporary.cleanup)
-        self.directory = Path(self.temporary.name)
+        self.directory = Path(self.temporary.name).resolve()
 
     def test_existing_pyside6_host_wins_over_requested_pyqt5(self) -> None:
         self.assertEqual(binding_candidates(loaded_modules={"PySide6.QtWidgets"}, requested_api="pyqt5"), ("PySide6",))
