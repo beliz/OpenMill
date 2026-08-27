@@ -2,7 +2,7 @@
 
 Atelier conversationnel de fraisage CNC, pensé pour être développé sous **Windows**, utilisé avec **LinuxCNC**, puis intégré proprement dans **Probe Basic / QtPyVCP**.
 
-**Version 0.6.0 — cycles conversationnels et motifs de répétition inspirés des commandes Heidenhain.**
+**Version 0.7.0 — répétitions hiérarchiques et espace conversationnel pleine fenêtre.**
 
 L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d’usinage, les opérations, les aperçus et la connexion machine sont séparés. Le même `QWidget` peut fonctionner comme application autonome ou devenir un onglet d’une interface LinuxCNC.
 
@@ -20,9 +20,11 @@ L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d�
 - Rainure droite/oblongue orientable avec ébauche et finition.
 - Cycles séparés de perçage simple, profond avec débourrage, avec pause/lamage et alésage.
 - Taraudage rigide LinuxCNC `G33.1`, à droite ou à gauche, avec contrôle explicite du pas.
-- Placement indépendant du cycle : position unique, ligne, grille orientable en zigzag ou motif polaire.
-- Répétition applicable à toutes les géométries, avec rotation optionnelle du cycle sur le motif.
-- Motif visible dans la liste des étapes, conservé dans le projet JSON et documenté dans le G-code.
+- Blocs de répétition indépendants : `Unique`, `Ligne`, `Grille` ou `Cercle`, contenant une ou plusieurs opérations.
+- Ordre d’usinage choisi pour chaque bloc : toutes les opérations par position ou chaque opération sur toutes les positions.
+- Arbre de programme hiérarchique, avec déplacement des opérations entre les répétitions.
+- Répétition applicable à toutes les géométries, avec rotation optionnelle des opérations sur le motif.
+- Migration automatique des projets 0.6.0 dont la répétition était encore intégrée à chaque opération.
 - Brut rectangulaire configurable, origine au coin ou au centre.
 - Aperçus interactifs dessus `XY`, face `XZ`, côté `YZ`.
 - Aperçu 3D VTK avec brut translucide et rendu compatible sans OpenGL si le pilote graphique est capricieux.
@@ -57,7 +59,8 @@ L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d�
 - Outils lus depuis le véritable fichier `TOOL_TABLE` de la configuration LinuxCNC, sans entrées runtime fantômes.
 - Diagnostic d’installation et parcours d’intégration simulé utilisables sous Windows.
 - Thème global Probe Basic moderne et réversible, sans remplacer sa police condensée ni casser ses dimensions fixes.
-- Mode intégré compact avec programme G-code repliable pour conserver la hauteur de l’aperçu.
+- Mode préparation pleine fenêtre : le jog latéral et les commandes machine inférieures de Probe Basic sont masqués uniquement pendant l’édition conversationnelle.
+- Formulaires larges sur deux colonnes, placés avant un aperçu de contrôle moins envahissant.
 - Extensions d’opérations installables indépendamment via les entry points Python.
 - Tests métier sans Qt, VTK ni LinuxCNC ; CI GitHub Windows et Linux.
 
@@ -102,16 +105,16 @@ python -m pip install -e .
 
 Le lanceur autonome utilise volontairement une machine simulée. Le widget d’intégration utilise l’adaptateur LinuxCNC réel ; voir [docs/integration-probe-basic.md](docs/integration-probe-basic.md).
 
-## Programmer un cycle et ses répétitions
+## Programmer des opérations et leurs répétitions
 
-OpenMill sépare maintenant le travail à effectuer de l’endroit où il doit être exécuté :
+OpenMill représente la répétition comme un vrai bloc du programme :
 
-1. ajouter une étape et choisir le cycle ou la géométrie ;
-2. régler l’outil, les profondeurs et les paramètres de coupe ;
-3. ouvrir **Placement / répétition** ou cliquer sur **Répéter l’étape** ;
-4. choisir **Unique**, **Ligne**, **Grille** ou **Cercle**.
+1. ajouter un bloc **Répétition** et choisir **Unique**, **Ligne**, **Grille** ou **Cercle** ;
+2. ajouter une ou plusieurs opérations sous ce bloc ;
+3. régler leurs outils, profondeurs et paramètres de coupe ;
+4. choisir **Par position** ou **Par opération** lorsque le bloc contient plusieurs opérations.
 
-Une seule étape reste affichée dans le programme. L’aperçu, le temps estimé et le G-code contiennent toutes ses occurrences. La grille peut être parcourue en zigzag pour réduire les rapides ; une rainure ou un profil peut aussi tourner avec une grille orientée ou un motif polaire.
+L’arbre affiche clairement `Répétition [Unique]`, `Répétition [Cercle]`, etc., puis les opérations imbriquées. La grille peut être parcourue en zigzag pour réduire les rapides ; une rainure ou un profil peut aussi tourner avec une grille orientée ou un motif polaire.
 
 ## Installer OpenMill dans un Probe Basic existant
 

@@ -163,20 +163,20 @@ QComboBox QAbstractItemView {
     border: 1px solid #28374d;
     selection-background-color: #234238;
 }
-QListWidget {
+QListWidget, QTreeWidget {
     background: #0d1522;
     border: 1px solid #233047;
     border-radius: 8px;
     padding: 5px;
     outline: none;
 }
-QListWidget::item {
+QListWidget::item, QTreeWidget::item {
     border-radius: 6px;
     min-height: 37px;
     padding: 4px 6px;
 }
-QListWidget::item:selected { background: #18332e; color: #8cf0c7; }
-QListWidget::item:hover:!selected { background: #172133; }
+QListWidget::item:selected, QTreeWidget::item:selected { background: #18332e; color: #8cf0c7; }
+QListWidget::item:hover:!selected, QTreeWidget::item:hover:!selected { background: #172133; }
 QPlainTextEdit {
     background: #0a111b;
     border: 1px solid #233047;

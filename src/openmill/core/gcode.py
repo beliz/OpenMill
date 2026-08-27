@@ -6,7 +6,7 @@ import json
 import re
 import unicodedata
 
-from openmill.core.models import MotionKind, Project, Toolpath
+from openmill.core.models import MotionKind, Project, RepetitionOrder, Toolpath
 
 
 def _number(value: float) -> str:
@@ -43,8 +43,30 @@ def generate_gcode(project: Project, paths: list[Toolpath]) -> str:
 
     current_tool: int | None = None
     current_feed: float | None = None
+    current_repetition: str | None = None
+    current_position: int | None = None
+    repetitions = {block.uid: block for block in project.repetitions}
     for index, path in enumerate(paths, 1):
+        if path.repetition_uid != current_repetition:
+            repetition = repetitions.get(path.repetition_uid)
+            if repetition is not None:
+                order = (
+                    "par position"
+                    if repetition.execution_order is RepetitionOrder.BY_POSITION
+                    else "par operation"
+                )
+                lines.extend(
+                    (
+                        "",
+                        f"(REPETITION - {_comment(repetition.placement.summary)} - ordre {order})",
+                    )
+                )
+            current_repetition = path.repetition_uid
+            current_position = None
         lines.extend(("", f"(OPERATION {index} - {_comment(path.operation_title)})"))
+        if path.repetition_position is not None and path.repetition_position != current_position:
+            lines.append(f"(POSITION {path.repetition_position})")
+            current_position = path.repetition_position
         if path.instance_count > 1:
             placement = path.placement_summary.replace("·", "-").replace("×", "x")
             lines.append(

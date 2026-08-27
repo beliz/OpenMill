@@ -6,7 +6,14 @@ import unittest
 from openmill.adapters.mock import MockMachineAdapter
 from openmill.core.engine import build_project
 from openmill.core.gcode import generate_gcode
-from openmill.core.models import MotionKind, PlacementMode, Project, Stock
+from openmill.core.models import (
+    MotionKind,
+    PlacementMode,
+    Project,
+    RepetitionBlock,
+    RepetitionOrder,
+    Stock,
+)
 from openmill.core.placement import placement_instances
 from openmill.core.project_io import dumps_project, loads_project
 from openmill.core.registry import registry
@@ -41,6 +48,23 @@ class PlacementTests(unittest.TestCase):
         self.assertEqual((placement.columns, placement.rows), (4, 3))
         self.assertEqual(placement.grid_angle, 30)
         self.assertTrue(placement.rotate_geometry)
+
+    def test_schema_two_stores_repetition_outside_operations(self) -> None:
+        operation = self.operation()
+        operation.placement.mode = PlacementMode.POLAR
+        payload = dumps_project(Project(stock=self.stock, operations=[operation]))
+        self.assertIn('"repetitions":', payload)
+        operation_payload = payload.split('"operations":', 1)[1].split('"repetitions":', 1)[0]
+        self.assertNotIn('"placement":', operation_payload)
+
+    def test_schema_one_pattern_is_migrated_to_a_repetition_block(self) -> None:
+        restored = loads_project(
+            '{"schema_version":1,"operations":[{"plugin_id":"drill_single",'
+            '"title":"Trou","placement":{"mode":"polar","count":5}}]}'
+        )
+        self.assertEqual(restored.schema_version, 2)
+        self.assertEqual(restored.repetitions[0].placement.mode, PlacementMode.POLAR)
+        self.assertEqual(restored.repetitions[0].placement.count, 5)
 
     def test_linear_pattern_expands_one_cycle_at_every_position(self) -> None:
         operation = self.operation()
@@ -122,6 +146,51 @@ class PlacementTests(unittest.TestCase):
         result = build_project(Project(stock=self.stock, operations=[operation]), self.adapter)
         output = generate_gcode(Project(stock=self.stock, operations=[operation]), result.toolpaths)
         self.assertIn("(MOTIF - Ligne - 2 positions - 2 appels)", output)
+
+    def test_user_can_execute_nested_operations_by_position(self) -> None:
+        first = self.operation()
+        first.title = "Premier"
+        second = self.operation("drill_dwell")
+        second.title = "Second"
+        repetition = RepetitionBlock(
+            operation_uids=[first.uid, second.uid],
+            execution_order=RepetitionOrder.BY_POSITION,
+        )
+        repetition.placement.mode = PlacementMode.LINEAR
+        repetition.placement.count = 2
+        project = Project(
+            stock=self.stock,
+            operations=[first, second],
+            repetitions=[repetition],
+        )
+        result = build_project(project, self.adapter)
+        self.assertEqual(
+            [(path.operation_title, path.repetition_position) for path in result.toolpaths],
+            [("Premier", 1), ("Second", 1), ("Premier", 2), ("Second", 2)],
+        )
+
+    def test_user_can_execute_nested_operations_by_operation(self) -> None:
+        first = self.operation()
+        first.title = "Premier"
+        second = self.operation("drill_dwell")
+        second.title = "Second"
+        repetition = RepetitionBlock(
+            operation_uids=[first.uid, second.uid],
+            execution_order=RepetitionOrder.BY_OPERATION,
+        )
+        repetition.placement.mode = PlacementMode.LINEAR
+        repetition.placement.count = 2
+        project = Project(
+            stock=self.stock,
+            operations=[first, second],
+            repetitions=[repetition],
+        )
+        result = build_project(project, self.adapter)
+        self.assertEqual(
+            [(path.operation_title, path.instance_count) for path in result.toolpaths],
+            [("Premier", 2), ("Second", 2)],
+        )
+        self.assertIn("ordre par operation", generate_gcode(project, result.toolpaths))
 
 
 class HoleCycleTests(unittest.TestCase):

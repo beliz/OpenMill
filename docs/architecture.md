@@ -38,7 +38,7 @@ Les nouvelles opérations ne doivent pas dupliquer leur logique de compensation.
 
 Les profils rectangle, cercle et polygone fournissent seulement une fabrique de contour compensé à ce moteur. La rainure utilise la même convention de sens et de finition avec une géométrie capsule dédiée dans `core.geometry`.
 
-Cette séparation combine désormais une géométrie et sa stratégie d’usinage avec une définition de placement indépendante. Une même opération peut être appelée une fois, en ligne, sur une grille cartésienne orientée ou sur un motif polaire. Les anciens réseaux de perçage restent lisibles dans les projets existants, mais le catalogue propose désormais des cycles de trou séparés de leur motif, dans l’esprit `CYCL DEF` puis `PATTERN DEF` d’une commande conversationnelle.
+Cette séparation combine désormais une géométrie et sa stratégie d’usinage avec des blocs `RepetitionBlock` indépendants. Chaque bloc contient les identifiants d’une ou plusieurs opérations, un placement et son ordre d’exécution. Le moteur peut donc exécuter toutes les opérations à chaque position ou développer chaque opération sur toutes les positions. Les cycles de trou restent séparés de leur motif, dans l’esprit `CYCL DEF` puis `PATTERN DEF` d’une commande conversationnelle.
 
 Le module `core.placement` calcule les positions absolues, transforme les trajectoires et insère les liaisons entre occurrences. Ces liaisons remontent systématiquement à la hauteur de sécurité avant tout déplacement latéral. Le moteur de validation, les aperçus, le temps estimé et le générateur G-code consomment ensuite la même trajectoire développée.
 
@@ -77,7 +77,7 @@ Les règles de sélection et les incréments sont testés dans le noyau Python, 
 
 ## Projet et compatibilité
 
-Le projet JSON contient un `schema_version`, le brut, l’origine, l’ordre des opérations, leurs paramètres et leur placement. Les fichiers antérieurs sans bloc `placement` restent chargés comme des opérations à position unique. Les identifiants d’opération ne doivent jamais changer silencieusement : toute évolution incompatible nécessite une migration explicite.
+Le schéma JSON 2 contient le brut, les opérations sans placement et une liste indépendante `repetitions`. Chaque répétition stocke son placement, l’ordre d’exécution choisi et les identifiants des opérations imbriquées. Les projets de schéma 1 sont migrés automatiquement : chaque ancien placement intégré devient un bloc de répétition séparé sans modifier l’identifiant de son opération.
 
 Le générateur `.ngc` ajoute aussi un commentaire JSON `OPENMILL_STOCK`. Une future intégration Probe Basic pourra récupérer ces dimensions pour initialiser son propre aperçu de brut.
 

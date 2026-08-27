@@ -8,11 +8,13 @@ from openmill.core.models import Project
 from openmill.integration.bridge import LinuxCNCProgramBridge, ProgramBridge, SimulatedProgramBridge
 from openmill.integration.main_preview import ProbeBasicPreviewController
 from openmill.integration.qtpyvcp_compat import silence_gcode_properties_debug_output
+from openmill.integration.workspace_mode import ProbeBasicWorkspaceController
 from openmill.integration.theme import (
     install_probe_basic_theme,
     probe_basic_theme_active,
     restore_probe_basic_theme,
 )
+from openmill.ui.qt_core import QTimer
 from openmill.ui.qt_widgets import QPushButton
 from openmill.ui.workbench import ConversationalWorkbench
 
@@ -52,7 +54,16 @@ class OpenMillConversationalWidget(ConversationalWorkbench):
         self._header.layout().insertWidget(self._header.layout().count() - 1, self._theme_button)
         self._update_theme_button()
         self._main_preview = ProbeBasicPreviewController(self, adapter, bridge)
+        self._workspace_mode = ProbeBasicWorkspaceController(self)
         self.program_loaded.connect(self._program_loaded_into_probe_basic)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        QTimer.singleShot(0, self._workspace_mode.enter)
+
+    def hideEvent(self, event) -> None:
+        self._workspace_mode.exit()
+        super().hideEvent(event)
 
     @property
     def program_bridge(self) -> ProgramBridge:

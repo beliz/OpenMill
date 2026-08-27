@@ -63,6 +63,27 @@
         "feed_z": 180,
         "spindle_rpm": 2500
       },
+      "enabled": true,
+      "uid": "demo_drilling"
+    }
+  ],
+  "repetitions": [
+    {
+      "operation_uids": ["demo_facing"],
+      "placement": {"mode": "single"},
+      "execution_order": "by_position",
+      "enabled": true,
+      "uid": "demo_repeat_facing"
+    },
+    {
+      "operation_uids": ["demo_pocket"],
+      "placement": {"mode": "single"},
+      "execution_order": "by_position",
+      "enabled": true,
+      "uid": "demo_repeat_pocket"
+    },
+    {
+      "operation_uids": ["demo_drilling"],
       "placement": {
         "mode": "polar",
         "center_x": 70,
@@ -73,10 +94,11 @@
         "sweep": 360,
         "rotate_geometry": false
       },
+      "execution_order": "by_position",
       "enabled": true,
-      "uid": "demo_drilling"
+      "uid": "demo_repeat_drilling"
     }
   ],
   "work_offset": "G54",
-  "schema_version": 1
+  "schema_version": 2
 }

@@ -245,6 +245,30 @@ class IntegrationPackageTests(unittest.TestCase):
         self.assertEqual(widget.attrib["name"], "CONVERSATIONNEL")
         self.assertEqual(widget.find("property[@name='sidebar']/bool").text, "false")
 
+    def test_conversational_workspace_mode_is_reversible(self) -> None:
+        integration_source = ast.parse(
+            (self.root / "src/openmill/integration/probe_basic.py").read_text(encoding="utf-8")
+        )
+        widget = next(
+            node
+            for node in integration_source.body
+            if isinstance(node, ast.ClassDef) and node.name == "OpenMillConversationalWidget"
+        )
+        methods = {
+            node.name: ast.unparse(node)
+            for node in widget.body
+            if isinstance(node, ast.FunctionDef) and node.name in {"showEvent", "hideEvent"}
+        }
+        self.assertIn("self._workspace_mode.enter", methods["showEvent"])
+        self.assertIn("self._workspace_mode.exit", methods["hideEvent"])
+
+        controller = (
+            self.root / "src/openmill/integration/workspace_mode.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("widget.hide()", controller)
+        self.assertIn("widget.show()", controller)
+        self.assertNotIn("setParent", controller)
+
     def test_interactions_do_not_force_compatible_renderer(self) -> None:
         source = ast.parse((self.root / "src/openmill/ui/preview_3d.py").read_text(encoding="utf-8"))
         preview = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == "VtkPreview")

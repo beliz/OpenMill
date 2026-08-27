@@ -4,6 +4,8 @@ OpenMill 0.5.1 s’intègre comme **onglet utilisateur**, sans modifier le dép�
 
 > Le chargement du programme et le départ cycle sont volontairement séparés. OpenMill ne démarre jamais une broche, un déplacement ou un programme.
 
+Quand l’onglet conversationnel est affiché, OpenMill masque temporairement la barre de jog latérale et le panneau de commandes inférieur afin d’utiliser toute la fenêtre pour l’arbre du programme, les formulaires et l’aperçu. Ces widgets Probe Basic ne sont ni déplacés ni détruits et retrouvent exactement leur visibilité dès que l’utilisateur change d’onglet.
+
 ## Installation automatique recommandée
 
 Depuis le dépôt cloné sur la machine LinuxCNC :

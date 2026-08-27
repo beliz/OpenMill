@@ -9,6 +9,7 @@ from openmill.core.models import (
     Motion,
     MotionKind,
     OperationRecord,
+    Placement,
     PlacementMode,
     Point,
     Stock,
@@ -35,10 +36,14 @@ def operation_anchor(operation: OperationRecord, stock: Stock) -> tuple[float, f
     )
 
 
-def placement_instances(operation: OperationRecord, stock: Stock) -> list[PlacementInstance]:
+def placement_instances(
+    operation: OperationRecord,
+    stock: Stock,
+    placement: Placement | None = None,
+) -> list[PlacementInstance]:
     """Expand a placement definition into ordered absolute call positions."""
 
-    placement = operation.placement
+    placement = placement or operation.placement
     anchor_x, anchor_y = operation_anchor(operation, stock)
     if placement.mode is PlacementMode.SINGLE:
         return [PlacementInstance(anchor_x, anchor_y)]
@@ -153,15 +158,19 @@ def apply_placement(
     path: Toolpath,
     operation: OperationRecord,
     stock: Stock,
+    *,
+    placement: Placement | None = None,
+    instances: list[PlacementInstance] | None = None,
 ) -> Toolpath:
-    """Return a path containing every call of the operation's pattern."""
+    """Return a path containing calls from an operation-independent pattern."""
 
-    if operation.placement.mode is PlacementMode.SINGLE:
+    placement = placement or operation.placement
+    if placement.mode is PlacementMode.SINGLE:
         path.instance_count = 1
-        path.placement_summary = operation.placement.summary
+        path.placement_summary = placement.summary
         return path
 
-    instances = placement_instances(operation, stock)
+    instances = instances if instances is not None else placement_instances(operation, stock, placement)
     anchor_x, anchor_y = operation_anchor(operation, stock)
     expanded = Toolpath(
         operation_uid=path.operation_uid,
@@ -171,7 +180,9 @@ def apply_placement(
         spindle_rpm=path.spindle_rpm,
         spindle_direction=path.spindle_direction,
         instance_count=len(instances),
-        placement_summary=operation.placement.summary,
+        placement_summary=placement.summary,
+        repetition_uid=path.repetition_uid,
+        repetition_position=path.repetition_position,
     )
     clearance = float(operation.parameters.get("clearance", 5.0))
     for instance in instances:

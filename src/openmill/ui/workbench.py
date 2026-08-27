@@ -17,13 +17,13 @@ from openmill.ui.qt_widgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QSplitter,
     QStackedWidget,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -32,14 +32,25 @@ from openmill.adapters.base import MachineAdapter
 from openmill.adapters.mock import MockMachineAdapter
 from openmill.core.engine import BuildResult, build_project, create_demo_project
 from openmill.core.gcode import generate_gcode
-from openmill.core.models import OperationRecord, OriginMode, PlacementMode, Project
+from openmill.core.models import (
+    OperationRecord,
+    OriginMode,
+    Project,
+    RepetitionBlock,
+    RepetitionOrder,
+)
 from openmill.core.project_io import load_project, save_project
 from openmill.core.registry import registry
 from openmill.integration.bridge import ProgramBridge, ProgramLoadError, prepare_and_load_program
 from openmill.ui.operation_form import OperationForm
 from openmill.ui.operation_picker import OperationPickerDialog
 from openmill.ui.preview_2d import VectorPreview
+from openmill.ui.repetition_form import RepetitionForm
 from openmill.ui.theme import STYLESHEET
+
+
+ITEM_UID_ROLE = int(Qt.UserRole)
+ITEM_KIND_ROLE = ITEM_UID_ROLE + 1
 
 
 def _panel() -> QFrame:
@@ -91,12 +102,12 @@ class ConversationalWorkbench(QWidget):
         columns.setChildrenCollapsible(False)
         columns.setHandleWidth(8)
         columns.addWidget(self._create_operations_panel())
-        columns.addWidget(self._create_preview_panel())
         columns.addWidget(self._create_parameters_panel())
+        columns.addWidget(self._create_preview_panel())
         columns.setStretchFactor(0, 0)
         columns.setStretchFactor(1, 1)
-        columns.setStretchFactor(2, 0)
-        columns.setSizes([250, 660, 330])
+        columns.setStretchFactor(2, 1)
+        columns.setSizes([280, 680, 500])
         outer.addWidget(columns, 1)
         self._gcode_panel = self._create_gcode_panel()
         outer.addWidget(self._gcode_panel)
@@ -183,28 +194,31 @@ class ConversationalWorkbench(QWidget):
         self._origin.currentIndexChanged.connect(self._stock_changed)
         layout.addWidget(self._origin)
 
-        operations_label = QLabel("OPÉRATIONS")
+        operations_label = QLabel("PROGRAMME")
         operations_label.setObjectName("section")
         layout.addWidget(operations_label)
-        self._operations_list = QListWidget()
-        self._operations_list.setDragDropMode(QAbstractItemView.InternalMove)
-        self._operations_list.currentItemChanged.connect(self._selection_changed)
-        self._operations_list.itemChanged.connect(self._operation_item_changed)
-        self._operations_list.model().rowsMoved.connect(self._operations_reordered)
-        layout.addWidget(self._operations_list, 1)
+        self._program_tree = QTreeWidget()
+        self._program_tree.setHeaderHidden(True)
+        self._program_tree.setIndentation(18)
+        self._program_tree.setDragDropMode(QAbstractItemView.InternalMove)
+        self._program_tree.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._program_tree.currentItemChanged.connect(self._selection_changed)
+        self._program_tree.itemChanged.connect(self._program_item_changed)
+        self._program_tree.model().rowsMoved.connect(self._program_rows_moved)
+        layout.addWidget(self._program_tree, 1)
 
-        add = QPushButton("＋  Ajouter une étape")
+        add = QPushButton("＋  Ajouter une opération")
         add.setObjectName("addOperation")
         add.setMinimumHeight(40 if self._embedded else 49)
         add.clicked.connect(self.show_operation_picker)
         layout.addWidget(add)
 
-        repeat = QPushButton("↻  Répéter l’étape")
-        repeat.setObjectName("repeatOperation")
-        repeat.setMinimumHeight(36)
-        repeat.setToolTip("Appliquer une ligne, une grille ou un motif circulaire au cycle sélectionné.")
-        repeat.clicked.connect(self.repeat_selected)
-        layout.addWidget(repeat)
+        repetition = QPushButton("＋  Ajouter une répétition")
+        repetition.setObjectName("repeatOperation")
+        repetition.setMinimumHeight(36)
+        repetition.setToolTip("Créer un bloc Unique, Ligne, Grille ou Cercle.")
+        repetition.clicked.connect(self.add_repetition)
+        layout.addWidget(repetition)
 
         buttons = QHBoxLayout()
         duplicate = QPushButton("Dupliquer")
@@ -261,13 +275,17 @@ class ConversationalWorkbench(QWidget):
 
     def _create_parameters_panel(self) -> QWidget:
         panel = _panel()
-        panel.setMinimumWidth(310)
-        panel.setMaximumWidth(460)
+        panel.setMinimumWidth(440)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
+        self._form_stack = QStackedWidget()
         self._form = OperationForm(self._adapter)
         self._form.operation_changed.connect(self._selected_operation_changed)
-        layout.addWidget(self._form)
+        self._repetition_form = RepetitionForm()
+        self._repetition_form.repetition_changed.connect(self._selected_repetition_changed)
+        self._form_stack.addWidget(self._form)
+        self._form_stack.addWidget(self._repetition_form)
+        layout.addWidget(self._form_stack)
         return panel
 
     def _create_gcode_panel(self) -> QWidget:
@@ -325,33 +343,78 @@ class ConversationalWorkbench(QWidget):
         self._origin.blockSignals(False)
 
     def _populate_operations(self, selected_uid: str | None = None) -> None:
-        self._operations_list.blockSignals(True)
-        self._operations_list.clear()
-        selected_row = 0
-        for index, operation in enumerate(self._project.operations):
-            item = QListWidgetItem(self._operation_item_text(operation))
-            item.setData(Qt.UserRole, operation.uid)
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled)
-            item.setCheckState(Qt.Checked if operation.enabled else Qt.Unchecked)
-            self._operations_list.addItem(item)
-            if operation.uid == selected_uid:
-                selected_row = index
-        if self._project.operations:
-            self._operations_list.setCurrentRow(selected_row)
-        self._operations_list.blockSignals(False)
-        self._form.set_operation(self._selected_operation())
+        self._program_tree.blockSignals(True)
+        self._program_tree.clear()
+        selected_item = None
+        by_uid = {operation.uid: operation for operation in self._project.operations}
+        for repetition in self._project.repetitions:
+            group_item = QTreeWidgetItem()
+            group_item.setText(0, self._repetition_item_text(repetition))
+            group_item.setData(0, ITEM_UID_ROLE, repetition.uid)
+            group_item.setData(0, ITEM_KIND_ROLE, "repetition")
+            group_item.setFlags(
+                group_item.flags()
+                | Qt.ItemIsUserCheckable
+                | Qt.ItemIsDragEnabled
+                | Qt.ItemIsDropEnabled
+            )
+            group_item.setCheckState(0, Qt.Checked if repetition.enabled else Qt.Unchecked)
+            self._program_tree.addTopLevelItem(group_item)
+            if repetition.uid == selected_uid:
+                selected_item = group_item
+            for operation_uid in repetition.operation_uids:
+                operation = by_uid.get(operation_uid)
+                if operation is None:
+                    continue
+                operation_item = QTreeWidgetItem()
+                operation_item.setText(0, self._operation_item_text(operation))
+                operation_item.setData(0, ITEM_UID_ROLE, operation.uid)
+                operation_item.setData(0, ITEM_KIND_ROLE, "operation")
+                operation_item.setFlags(
+                    (operation_item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled)
+                    & ~Qt.ItemIsDropEnabled
+                )
+                operation_item.setCheckState(0, Qt.Checked if operation.enabled else Qt.Unchecked)
+                group_item.addChild(operation_item)
+                if operation.uid == selected_uid:
+                    selected_item = operation_item
+            group_item.setExpanded(True)
+        if selected_item is None and self._program_tree.topLevelItemCount():
+            selected_item = self._program_tree.topLevelItem(0)
+        self._program_tree.setCurrentItem(selected_item)
+        self._program_tree.blockSignals(False)
+        self._show_selected_form()
 
     @staticmethod
     def _operation_item_text(operation: OperationRecord) -> str:
-        placement = "Unique" if operation.placement.mode is PlacementMode.SINGLE else operation.placement.summary
-        return f"{operation.title}\nT{operation.tool_number}  ·  {placement}"
+        return f"{operation.title}\nT{operation.tool_number}"
+
+    @staticmethod
+    def _repetition_item_text(repetition: RepetitionBlock) -> str:
+        order = (
+            "par position"
+            if repetition.execution_order is RepetitionOrder.BY_POSITION
+            else "par opération"
+        )
+        return f"{repetition.title}\n{repetition.placement.summary}  ·  {order}"
 
     def _selected_operation(self) -> OperationRecord | None:
-        item = self._operations_list.currentItem()
+        item = self._program_tree.currentItem()
+        if item is None or item.data(0, ITEM_KIND_ROLE) != "operation":
+            return None
+        uid = item.data(0, ITEM_UID_ROLE)
+        return next((operation for operation in self._project.operations if operation.uid == uid), None)
+
+    def _selected_repetition(self) -> RepetitionBlock | None:
+        item = self._program_tree.currentItem()
         if item is None:
             return None
-        uid = item.data(Qt.UserRole)
-        return next((operation for operation in self._project.operations if operation.uid == uid), None)
+        if item.data(0, ITEM_KIND_ROLE) == "operation":
+            item = item.parent()
+        if item is None or item.data(0, ITEM_KIND_ROLE) != "repetition":
+            return None
+        uid = item.data(0, ITEM_UID_ROLE)
+        return next((block for block in self._project.repetitions if block.uid == uid), None)
 
     def _selected_uid(self) -> str | None:
         operation = self._selected_operation()
@@ -393,31 +456,98 @@ class ConversationalWorkbench(QWidget):
         self._schedule_refresh()
 
     def _selection_changed(self, current, _previous) -> None:
-        self._form.set_operation(self._selected_operation())
+        self._show_selected_form()
         self._schedule_refresh()
 
-    def _operation_item_changed(self, item: QListWidgetItem) -> None:
-        uid = item.data(Qt.UserRole)
-        operation = next((entry for entry in self._project.operations if entry.uid == uid), None)
+    def _show_selected_form(self) -> None:
+        operation = self._selected_operation()
         if operation is not None:
-            operation.enabled = item.checkState() == Qt.Checked
-            self._schedule_refresh()
+            self._form.set_operation(operation)
+            self._repetition_form.set_repetition(None)
+            self._form_stack.setCurrentWidget(self._form)
+            return
+        self._form.set_operation(None)
+        self._repetition_form.set_repetition(self._selected_repetition())
+        self._form_stack.setCurrentWidget(self._repetition_form)
 
-    def _operations_reordered(self, *_args) -> None:
-        by_uid = {operation.uid: operation for operation in self._project.operations}
-        self._project.operations = [
-            by_uid[self._operations_list.item(index).data(Qt.UserRole)]
-            for index in range(self._operations_list.count())
-        ]
+    def _program_item_changed(self, item: QTreeWidgetItem, _column: int) -> None:
+        uid = item.data(0, ITEM_UID_ROLE)
+        if item.data(0, ITEM_KIND_ROLE) == "repetition":
+            repetition = next((entry for entry in self._project.repetitions if entry.uid == uid), None)
+            if repetition is not None:
+                repetition.enabled = item.checkState(0) == Qt.Checked
+        else:
+            operation = next((entry for entry in self._project.operations if entry.uid == uid), None)
+            if operation is not None:
+                operation.enabled = item.checkState(0) == Qt.Checked
+        self._schedule_refresh()
+
+    def _program_rows_moved(self, *_args) -> None:
+        QTimer.singleShot(0, self._program_reordered)
+
+    def _program_reordered(self) -> None:
+        repetitions = {block.uid: block for block in self._project.repetitions}
+        operations = {operation.uid: operation for operation in self._project.operations}
+        ordered_repetitions: list[RepetitionBlock] = []
+        ordered_operation_uids: list[str] = []
+        selected_uid = None
+        current = self._program_tree.currentItem()
+        if current is not None:
+            selected_uid = current.data(0, ITEM_UID_ROLE)
+        for index in range(self._program_tree.topLevelItemCount()):
+            item = self._program_tree.topLevelItem(index)
+            kind = item.data(0, ITEM_KIND_ROLE)
+            if kind == "operation":
+                uid = item.data(0, ITEM_UID_ROLE)
+                if uid in operations:
+                    block = RepetitionBlock(operation_uids=[uid])
+                    ordered_repetitions.append(block)
+                    ordered_operation_uids.append(uid)
+                continue
+            repetition = repetitions.get(item.data(0, ITEM_UID_ROLE))
+            if repetition is None:
+                continue
+            repetition.operation_uids = []
+            for child_index in range(item.childCount()):
+                child = item.child(child_index)
+                if child.data(0, ITEM_KIND_ROLE) != "operation":
+                    continue
+                uid = child.data(0, ITEM_UID_ROLE)
+                if uid in operations and uid not in ordered_operation_uids:
+                    repetition.operation_uids.append(uid)
+                    ordered_operation_uids.append(uid)
+                    operations[uid].placement = repetition.placement
+            ordered_repetitions.append(repetition)
+        for uid in operations:
+            if uid not in ordered_operation_uids:
+                block = self._project.repetition_for(uid) or RepetitionBlock(operation_uids=[uid])
+                block.operation_uids = [uid]
+                operations[uid].placement = block.placement
+                ordered_repetitions.append(block)
+                ordered_operation_uids.append(uid)
+        self._project.repetitions = ordered_repetitions
+        self._project.operations = [operations[uid] for uid in ordered_operation_uids]
+        self._populate_operations(selected_uid)
         self._schedule_refresh()
 
     def _selected_operation_changed(self) -> None:
         operation = self._selected_operation()
-        item = self._operations_list.currentItem()
+        item = self._program_tree.currentItem()
         if operation is not None and item is not None:
-            self._operations_list.blockSignals(True)
-            item.setText(self._operation_item_text(operation))
-            self._operations_list.blockSignals(False)
+            self._program_tree.blockSignals(True)
+            item.setText(0, self._operation_item_text(operation))
+            self._program_tree.blockSignals(False)
+        self._schedule_refresh()
+
+    def _selected_repetition_changed(self) -> None:
+        repetition = self._selected_repetition()
+        item = self._program_tree.currentItem()
+        if repetition is not None and item is not None:
+            if item.data(0, ITEM_KIND_ROLE) == "operation":
+                item = item.parent()
+            self._program_tree.blockSignals(True)
+            item.setText(0, self._repetition_item_text(repetition))
+            self._program_tree.blockSignals(False)
         self._schedule_refresh()
 
     def add_operation(self, plugin_id: str) -> None:
@@ -428,7 +558,19 @@ class ConversationalWorkbench(QWidget):
             suggested_tool = min(available)
         operation = plugin.create_record(self._project.stock, tool_number=suggested_tool)
         self._project.operations.append(operation)
+        repetition = self._selected_repetition()
+        if repetition is None:
+            repetition = RepetitionBlock()
+            self._project.repetitions.append(repetition)
+        repetition.operation_uids.append(operation.uid)
+        operation.placement = repetition.placement
         self._populate_operations(operation.uid)
+        self._schedule_refresh()
+
+    def add_repetition(self) -> None:
+        repetition = RepetitionBlock()
+        self._project.repetitions.append(repetition)
+        self._populate_operations(repetition.uid)
         self._schedule_refresh()
 
     def show_operation_picker(self) -> None:
@@ -438,28 +580,48 @@ class ConversationalWorkbench(QWidget):
 
     def duplicate_selected(self) -> None:
         current = self._selected_operation()
-        if current is None:
+        repetition = self._selected_repetition()
+        if current is not None and repetition is not None:
+            duplicate = current.clone()
+            self._project.operations.insert(self._project.operations.index(current) + 1, duplicate)
+            index = repetition.operation_uids.index(current.uid) + 1
+            repetition.operation_uids.insert(index, duplicate.uid)
+            duplicate.placement = repetition.placement
+            self._populate_operations(duplicate.uid)
+            self._schedule_refresh()
             return
-        duplicate = current.clone()
-        self._project.operations.insert(self._project.operations.index(current) + 1, duplicate)
-        self._populate_operations(duplicate.uid)
+        if repetition is None:
+            return
+        duplicates = []
+        by_uid = {operation.uid: operation for operation in self._project.operations}
+        for uid in repetition.operation_uids:
+            if uid in by_uid:
+                duplicates.append(by_uid[uid].clone())
+        self._project.operations.extend(duplicates)
+        clone = repetition.clone([operation.uid for operation in duplicates])
+        for operation in duplicates:
+            operation.placement = clone.placement
+        index = self._project.repetitions.index(repetition) + 1
+        self._project.repetitions.insert(index, clone)
+        self._populate_operations(clone.uid)
         self._schedule_refresh()
-
-    def repeat_selected(self) -> None:
-        current = self._selected_operation()
-        if current is None:
-            return
-        if current.placement.mode is PlacementMode.SINGLE:
-            current.placement.mode = PlacementMode.LINEAR
-        self._form.set_operation(current)
-        self._form.focus_placement()
-        self._selected_operation_changed()
 
     def remove_selected(self) -> None:
         current = self._selected_operation()
-        if current is None:
+        repetition = self._selected_repetition()
+        if current is not None and repetition is not None:
+            repetition.operation_uids.remove(current.uid)
+            self._project.operations.remove(current)
+            self._populate_operations(repetition.uid)
+            self._schedule_refresh()
             return
-        self._project.operations.remove(current)
+        if repetition is None:
+            return
+        operation_uids = set(repetition.operation_uids)
+        self._project.operations = [
+            operation for operation in self._project.operations if operation.uid not in operation_uids
+        ]
+        self._project.repetitions.remove(repetition)
         self._populate_operations()
         self._schedule_refresh()
 

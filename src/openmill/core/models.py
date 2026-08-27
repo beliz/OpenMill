@@ -32,6 +32,13 @@ class PlacementMode(str, Enum):
     POLAR = "polar"
 
 
+class RepetitionOrder(str, Enum):
+    """How operations nested in one repetition block are scheduled."""
+
+    BY_POSITION = "by_position"
+    BY_OPERATION = "by_operation"
+
+
 @dataclass(frozen=True, slots=True)
 class Point:
     x: float
@@ -150,6 +157,15 @@ class Placement:
             return f"Grille · {self.columns} × {self.rows}"
         return f"Cercle · {self.count} positions"
 
+    @property
+    def label(self) -> str:
+        return {
+            PlacementMode.SINGLE: "Unique",
+            PlacementMode.LINEAR: "Ligne",
+            PlacementMode.GRID: "Grille",
+            PlacementMode.POLAR: "Cercle",
+        }[self.mode]
+
 
 @dataclass(frozen=True, slots=True)
 class Motion:
@@ -191,6 +207,34 @@ class OperationRecord:
 
 
 @dataclass(slots=True)
+class RepetitionBlock:
+    """First-class program block applying one placement to nested operations."""
+
+    operation_uids: list[str] = field(default_factory=list)
+    placement: Placement = field(default_factory=Placement)
+    execution_order: RepetitionOrder = RepetitionOrder.BY_POSITION
+    enabled: bool = True
+    uid: str = field(default_factory=lambda: uuid4().hex)
+
+    def __post_init__(self) -> None:
+        if isinstance(self.placement, dict):
+            self.placement = Placement(**self.placement)
+        self.execution_order = RepetitionOrder(self.execution_order)
+
+    @property
+    def title(self) -> str:
+        return f"Répétition [{self.placement.label}]"
+
+    def clone(self, operation_uids: list[str]) -> RepetitionBlock:
+        return RepetitionBlock(
+            operation_uids=operation_uids,
+            placement=replace(self.placement),
+            execution_order=self.execution_order,
+            enabled=self.enabled,
+        )
+
+
+@dataclass(slots=True)
 class Toolpath:
     operation_uid: str
     operation_title: str
@@ -201,6 +245,8 @@ class Toolpath:
     spindle_direction: str = "clockwise"
     instance_count: int = 1
     placement_summary: str = "Position unique"
+    repetition_uid: str = ""
+    repetition_position: int | None = None
 
     @property
     def cutting_length(self) -> float:
@@ -225,25 +271,86 @@ class Project:
     name: str = "Nouvelle pièce"
     stock: Stock = field(default_factory=Stock)
     operations: list[OperationRecord] = field(default_factory=list)
+    repetitions: list[RepetitionBlock] = field(default_factory=list)
     work_offset: str = "G54"
-    schema_version: int = 1
+    schema_version: int = 2
+
+    def __post_init__(self) -> None:
+        self.repetitions = [
+            block if isinstance(block, RepetitionBlock) else RepetitionBlock(**block)
+            for block in self.repetitions
+        ]
+        known_uids = {operation.uid for operation in self.operations}
+        grouped_uids: set[str] = set()
+        for block in self.repetitions:
+            block.operation_uids = [
+                uid for uid in block.operation_uids if uid in known_uids and uid not in grouped_uids
+            ]
+            grouped_uids.update(block.operation_uids)
+        for operation in self.operations:
+            if operation.uid not in grouped_uids:
+                self.repetitions.append(
+                    RepetitionBlock(
+                        operation_uids=[operation.uid],
+                        placement=replace(operation.placement),
+                    )
+                )
+        by_uid = {operation.uid: operation for operation in self.operations}
+        for block in self.repetitions:
+            for operation_uid in block.operation_uids:
+                if operation_uid in by_uid:
+                    # Compatibility alias for integrations written against
+                    # schema 1.  The editor and JSON both use the block.
+                    by_uid[operation_uid].placement = block.placement
+
+    def repetition_for(self, operation_uid: str) -> RepetitionBlock | None:
+        return next(
+            (block for block in self.repetitions if operation_uid in block.operation_uids),
+            None,
+        )
 
     def to_dict(self) -> dict[str, Any]:
-        result = asdict(self)
-        result["stock"]["origin"] = self.stock.origin.value
-        for operation in result["operations"]:
-            operation["placement"]["mode"] = PlacementMode(operation["placement"]["mode"]).value
-        return result
+        stock = asdict(self.stock)
+        stock["origin"] = self.stock.origin.value
+        operations = []
+        for record in self.operations:
+            operation = asdict(record)
+            # Since schema 2, placement belongs to a repetition block.  The
+            # attribute remains on OperationRecord only as a source migration
+            # shim for callers still constructing schema-1 style projects.
+            operation.pop("placement", None)
+            operations.append(operation)
+        repetitions = []
+        for record in self.repetitions:
+            repetition = asdict(record)
+            repetition["placement"]["mode"] = record.placement.mode.value
+            repetition["execution_order"] = record.execution_order.value
+            repetitions.append(repetition)
+        return {
+            "name": self.name,
+            "stock": stock,
+            "operations": operations,
+            "repetitions": repetitions,
+            "work_offset": self.work_offset,
+            "schema_version": 2,
+        }
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> Project:
         version = payload.get("schema_version", 1)
-        if version != 1:
+        if version not in {1, 2}:
             raise ValueError(f"Version de projet non prise en charge : {version}.")
+        operations = [OperationRecord(**record) for record in payload.get("operations", [])]
+        repetitions = (
+            [RepetitionBlock(**record) for record in payload.get("repetitions", [])]
+            if version == 2
+            else []
+        )
         return cls(
             name=payload.get("name", "Projet importé"),
             stock=Stock(**payload.get("stock", {})),
-            operations=[OperationRecord(**record) for record in payload.get("operations", [])],
+            operations=operations,
+            repetitions=repetitions,
             work_offset=payload.get("work_offset", "G54"),
-            schema_version=version,
+            schema_version=2,
         )

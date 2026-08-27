@@ -35,5 +35,7 @@ QSplitter = QtWidgets.QSplitter
 QStackedWidget = QtWidgets.QStackedWidget
 QTabWidget = QtWidgets.QTabWidget
 QTextEdit = QtWidgets.QTextEdit
+QTreeWidget = QtWidgets.QTreeWidget
+QTreeWidgetItem = QtWidgets.QTreeWidgetItem
 QVBoxLayout = QtWidgets.QVBoxLayout
 QWidget = QtWidgets.QWidget
