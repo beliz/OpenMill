@@ -77,7 +77,8 @@ Les règles de sélection et les incréments sont testés dans le noyau Python, 
 
 Les expressions sont analysées par `ast` avec une liste blanche stricte : nombres, parenthèses,
 `+`, `-`, `*`, `/` et variables explicitement fournies. `tool_diam` reçoit le diamètre de l’outil
-sélectionné. Le moteur réévalue les expressions juste avant de produire la trajectoire ; une
+sélectionné ; `stock_x` et `stock_y` reçoivent les dimensions du brut (`brut_x` et `brut_y` sont
+des alias acceptés). Le moteur réévalue les expressions des opérations et répétitions juste avant de produire la trajectoire ; une
 formule sauvegardée reste donc liée à la table d’outils et pas seulement à la valeur affichée lors
 de sa saisie.
 
@@ -87,12 +88,11 @@ reçoivent toujours la même part de l’espace lors du redimensionnement.
 
 ## Traductions Qt en surcouche
 
-`openmill.integration.i18n` charge des catalogues Qt depuis le paquet, la configuration machine ou
-un chemin explicite. Un plugin de données QtPyVCP peut l’activer pendant l’initialisation de
-`QApplication`, avant le chargement des fenêtres Probe Basic. Cette architecture exploite les
-contextes de traduction des fichiers Qt Designer sans modifier Probe Basic. Les textes dynamiques
-non passés par `tr()` restent identifiés comme une limite upstream et ne sont jamais remplacés par
-une modification opaque de widgets machine.
+`openmill.integration.i18n` charge des catalogues Qt `.qm` ou des dictionnaires JSON auditable
+depuis le paquet, la configuration machine ou un chemin explicite. Un plugin de données QtPyVCP
+peut l’activer pendant l’initialisation de `QApplication`. L’onglet applique aussi les traductions
+aux arbres de widgets déjà construits et aux contrôles affichés ensuite. Cette surcouche conserve
+les sources Probe Basic intactes et ne traduit jamais le contenu saisi dans les champs texte.
 
 ## Projet et compatibilité
 

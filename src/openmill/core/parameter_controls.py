@@ -13,6 +13,29 @@ class NumericExpressionError(ValueError):
     """Raised when a parameter expression is unsafe or cannot be evaluated."""
 
 
+def machining_formula_variables(
+    *,
+    stock_x: float,
+    stock_y: float,
+    tool_diam: float | None = None,
+) -> dict[str, float]:
+    """Return the stable variables exposed by every conversational formula field.
+
+    English names are canonical.  The French stock aliases remain accepted so
+    existing workshop habits do not turn into opaque formula errors.
+    """
+
+    variables = {
+        "stock_x": float(stock_x),
+        "stock_y": float(stock_y),
+        "brut_x": float(stock_x),
+        "brut_y": float(stock_y),
+    }
+    if tool_diam is not None:
+        variables["tool_diam"] = float(tool_diam)
+    return variables
+
+
 def evaluate_numeric_expression(
     expression: str,
     variables: Mapping[str, float] | None = None,

@@ -51,7 +51,8 @@ class TouchNumberControl(QWidget):
         self._showing_result = True
         self._base_tooltip = (
             "Clique pour saisir une valeur ou un calcul (+, -, *, /, parenthèses). "
-            "Exemple : 120/2 ou 5+tool_diam/2. Glisse horizontalement pour ajuster."
+            "Variables : tool_diam, stock_x, stock_y (alias brut_x, brut_y). "
+            "Exemple : stock_x/2-tool_diam. Glisse horizontalement pour ajuster."
         )
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

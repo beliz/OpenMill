@@ -25,7 +25,11 @@ from openmill.integration.bridge import (
     project_filename,
 )
 from openmill.integration.check import main as check_main
-from openmill.integration.i18n import language_variants, translation_directories
+from openmill.integration.i18n import (
+    catalog_candidates,
+    language_variants,
+    translation_directories,
+)
 from openmill.integration.qtpyvcp_compat import silence_gcode_properties_debug_output
 from openmill.integration.runtime import (
     binding_candidates,
@@ -251,6 +255,20 @@ class RuntimeDiscoveryTests(unittest.TestCase):
         source.write_text("[DISPLAY]\n", encoding="utf-8")
         directories = translation_directories(environ={"INI_FILE_NAME": str(source)})
         self.assertEqual(directories[-1], self.directory / "openmill-translations")
+
+    def test_packaged_us_and_french_catalogs_are_discoverable(self) -> None:
+        directories = translation_directories(environ={})
+        english = {path.name for path in catalog_candidates("en_US", directories)}
+        french = {path.name for path in catalog_candidates("fr", directories)}
+        self.assertIn("openmill_en.json", english)
+        self.assertIn("probe_basic_fr.json", french)
+
+    def test_translation_catalogs_contain_critical_navigation_labels(self) -> None:
+        directory = Path(__file__).parents[1] / "src" / "openmill" / "translations"
+        english = json.loads((directory / "openmill_en.json").read_text(encoding="utf-8"))
+        french = json.loads((directory / "probe_basic_fr.json").read_text(encoding="utf-8"))
+        self.assertEqual(english["messages"]["Ajouter une étape"], "Add an operation")
+        self.assertEqual(french["messages"]["PROBING"], "PALPAGE")
 
     def test_report_detects_installed_components_without_importing_them(self) -> None:
         available = {"PySide6", "vtk", "linuxcnc", "qtpyvcp", "probe_basic"}

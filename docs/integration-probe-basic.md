@@ -1,6 +1,6 @@
 # Intégrer OpenMill dans Probe Basic
 
-OpenMill 0.9.0 s’intègre comme **onglet utilisateur**, sans modifier le dépôt Probe Basic et sans faire de fork. La même extension fonctionne en simulation et sur une installation LinuxCNC réelle.
+OpenMill 0.10.0 s’intègre comme **onglet utilisateur**, sans modifier le dépôt Probe Basic et sans faire de fork. La même extension fonctionne en simulation et sur une installation LinuxCNC réelle.
 
 > Le chargement du programme et le départ cycle sont volontairement séparés. OpenMill ne démarre jamais une broche, un déplacement ou un programme.
 
@@ -180,8 +180,8 @@ Le mode intégré OpenMill est indépendant du thème global. Il applique toujou
 
 Probe Basic et QtPyVCP ne livrent actuellement ni option de langue, ni appel à
 `QTranslator`, ni catalogue `.ts`/`.qm`. Leurs interfaces restent néanmoins des fichiers Qt
-Designer : Qt sait traduire ces textes au chargement si un traducteur est installé avant la
-construction de la fenêtre.
+Designer. OpenMill installe ses traducteurs Qt puis retraduit aussi les widgets existants et ceux
+qui apparaissent dynamiquement.
 
 OpenMill fournit donc un chargeur de catalogues indépendant des sources upstream. La langue se
 règle dans l’INI :
@@ -189,19 +189,21 @@ règle dans l’INI :
 ```ini
 [DISPLAY]
 OPENMILL_LANGUAGE = fr
+# ou : OPENMILL_LANGUAGE = en_US
 ```
 
 La variable d’environnement `OPENMILL_LANGUAGE` est prioritaire. Les valeurs `system` ou `auto`
 reprennent `LC_ALL`, `LC_MESSAGES`, `LANGUAGE` ou `LANG`. Les catalogues sont recherchés sous les
-noms `openmill_fr.qm`, `probe_basic_fr.qm` et `qtpyvcp_fr.qm` :
+noms `openmill_en.json`, `probe_basic_fr.json`, ou sous forme compilée `.qm` :
 
 1. dans les dossiers listés par `OPENMILL_TRANSLATIONS` ;
 2. dans `openmill-translations/`, à côté du fichier INI de la machine ;
 3. dans le paquet OpenMill.
 
-L’onglet OpenMill charge automatiquement les catalogues disponibles. Pour traduire également la
-fenêtre principale de Probe Basic dès sa construction, fusionner le plugin fourni dans le
-`custom_config.yml` de la machine :
+L’installateur demande la langue et écrit un bloc réversible `OPENMILL_LANGUAGE`. L’onglet charge
+automatiquement les catalogues puis parcourt la fenêtre Probe Basic déjà ouverte ; aucune fusion
+manuelle n’est nécessaire. Pour installer les traductions encore plus tôt, avant la construction
+de la fenêtre principale, le plugin QtPyVCP suivant reste disponible :
 
 ```yaml
 data_plugins:
@@ -214,10 +216,10 @@ le mécanisme d’extension officiel de QtPyVCP : il installe les catalogues apr
 `QApplication`, mais avant le chargement du `.ui` Probe Basic. Aucun fichier Python ou `.ui` de
 Probe Basic n’est modifié.
 
-Le socle 0.9.0 rend donc la traduction transparente et versionnable. La constitution d’un
-catalogue français exhaustif reste un travail distinct : les chaînes explicitement marquées
-`notr="true"` dans certains `.ui` et les textes Python construits sans `tr()` devront être traités
-par une petite surcouche ciblée ou corrigés upstream.
+La version 0.10 fournit l’interface OpenMill en français et en anglais US, ainsi qu’un catalogue
+français des principales pages et commandes Probe Basic. Les textes techniques rares, les longs
+blocs d’aide HTML et les chaînes explicitement marquées `notr="true"` en amont restent en anglais ;
+ils peuvent être ajoutés au catalogue JSON sans modifier Probe Basic.
 
 ## 7. Charger un programme généré
 

@@ -11,6 +11,8 @@ from openmill.adapters.mock import MockMachineAdapter
 from openmill import __version__
 from openmill.core.engine import create_demo_project
 from openmill.core.models import Project
+from openmill.integration.i18n import install_qt_translations, retranslate_widget_tree
+from openmill.integration.runtime import configured_language
 from openmill.ui.theme import STYLESHEET
 from openmill.ui.workbench import ConversationalWorkbench
 
@@ -44,7 +46,13 @@ def run_application(*, project_path: str | None = None, demo: bool = False) -> i
     app.setOrganizationName("OpenMill")
     app.setStyle("Fusion")
     app.setStyleSheet(STYLESHEET)
-    QLocale.setDefault(QLocale(QLocale.French, QLocale.France))
+    language = configured_language()
+    locale = QLocale(language)
+    if locale.language() == QLocale.C:
+        locale = QLocale(QLocale.French, QLocale.France)
+    QLocale.setDefault(locale)
+    install_qt_translations(app, language=language)
     window = OpenMillWindow(project_path=project_path, demo=demo)
+    retranslate_widget_tree(window)
     window.show()
     return app.exec()

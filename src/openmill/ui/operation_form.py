@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from openmill.adapters.base import MachineAdapter
-from openmill.core.models import OperationRecord, PlacementMode
-from openmill.core.parameter_controls import uses_angle_dial, uses_percentage_slider
+from openmill.core.models import OperationRecord, PlacementMode, Stock
+from openmill.core.parameter_controls import (
+    machining_formula_variables,
+    uses_angle_dial,
+    uses_percentage_slider,
+)
 from openmill.core.registry import FieldSpec, registry
+from openmill.integration.i18n import retranslate_widget_tree, translate_text
 from openmill.ui.parameter_controls import (
     AngleControl,
     PercentageControl,
@@ -30,9 +37,16 @@ from openmill.ui.qt_widgets import (
 class OperationForm(QWidget):
     operation_changed = pyqtSignal()
 
-    def __init__(self, adapter: MachineAdapter, parent=None) -> None:
+    def __init__(
+        self,
+        adapter: MachineAdapter,
+        parent=None,
+        *,
+        stock_provider: Callable[[], Stock] | None = None,
+    ) -> None:
         super().__init__(parent)
         self._adapter = adapter
+        self._stock_provider = stock_provider
         self._operation: OperationRecord | None = None
         self._loading = False
         layout = QVBoxLayout(self)
@@ -45,7 +59,8 @@ class OperationForm(QWidget):
         self._description.setObjectName("muted")
         layout.addWidget(self._description)
         calculation_hint = QLabel(
-            "Astuce · calculs acceptés : 120/2, 12*3 et tool_diam (ex. 5+tool_diam/2)."
+            "Astuce · variables : tool_diam, stock_x et stock_y "
+            "(ex. stock_x/2-tool_diam)."
         )
         calculation_hint.setObjectName("muted")
         layout.addWidget(calculation_hint)
@@ -83,9 +98,9 @@ class OperationForm(QWidget):
             return
 
         plugin = registry.get(operation.plugin_id)
-        self._heading.setText(plugin.label)
-        self._description.setText(plugin.description)
-        title = QLineEdit(operation.title)
+        self._heading.setText(translate_text(plugin.label))
+        self._description.setText(translate_text(plugin.description))
+        title = QLineEdit(translate_text(operation.title))
         title.setMinimumHeight(40)
         title.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         title.textChanged.connect(self._title_changed)
@@ -136,6 +151,7 @@ class OperationForm(QWidget):
         self._finish_grid_row()
         self._form.setRowStretch(self._grid_row, 1)
         self._loading = False
+        retranslate_widget_tree(self)
 
     def _add_section(self, title: str) -> None:
         self._finish_grid_row()
@@ -196,7 +212,7 @@ class OperationForm(QWidget):
             expression_callback=lambda current, key=specification.key: self._expression_changed(
                 key, current
             ),
-            variables=self._tool_variables(operation),
+            variables=self._formula_variables(operation),
         )
 
     def _create_control(
@@ -241,12 +257,24 @@ class OperationForm(QWidget):
             self._formula_controls.append(field)
         return field
 
-    def _tool_variables(self, operation: OperationRecord) -> dict[str, float]:
+    def _formula_variables(self, operation: OperationRecord) -> dict[str, float]:
+        stock = self._stock_provider() if self._stock_provider is not None else Stock()
         try:
             tool = self._adapter.get_tool(operation.tool_number)
         except ValueError:
-            return {}
-        return {"tool_diam": float(tool.diameter)}
+            return machining_formula_variables(stock_x=stock.width, stock_y=stock.height)
+        return machining_formula_variables(
+            stock_x=stock.width,
+            stock_y=stock.height,
+            tool_diam=tool.diameter,
+        )
+
+    def refresh_formula_variables(self) -> None:
+        if self._operation is None:
+            return
+        variables = self._formula_variables(self._operation)
+        for control in self._formula_controls:
+            control.set_variables(variables)
 
     def _title_changed(self, title: str) -> None:
         if self._operation is not None and not self._loading:
@@ -256,9 +284,7 @@ class OperationForm(QWidget):
     def _tool_changed(self, tool_number: int | None) -> None:
         if self._operation is not None and tool_number is not None and not self._loading:
             self._operation.tool_number = tool_number
-            variables = self._tool_variables(self._operation)
-            for control in self._formula_controls:
-                control.set_variables(variables)
+            self.refresh_formula_variables()
             self.operation_changed.emit()
 
     def _parameter_changed(self, key: str, value) -> None:

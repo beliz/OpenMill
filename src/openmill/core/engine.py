@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, replace
 
 from openmill import operations as _registered_operations  # noqa: F401
@@ -15,7 +16,11 @@ from openmill.core.models import (
     Stock,
     Toolpath,
 )
-from openmill.core.parameter_controls import evaluate_field_expression
+from openmill.core.parameter_controls import (
+    evaluate_field_expression,
+    evaluate_numeric_expression,
+    machining_formula_variables,
+)
 from openmill.core.placement import PlacementInstance, apply_placement, placement_instances
 from openmill.core.registry import registry
 
@@ -129,7 +134,11 @@ def _build_operation_call(
             parameters[key] = evaluate_field_expression(
                 specifications[key],
                 expression,
-                {"tool_diam": float(tool.diameter)},
+                machining_formula_variables(
+                    stock_x=project.stock.width,
+                    stock_y=project.stock.height,
+                    tool_diam=tool.diameter,
+                ),
             )
         resolved_operation = replace(operation, parameters=parameters)
         path = plugin.generate(resolved_operation, project.stock, tool)
@@ -147,18 +156,48 @@ def _build_operation_call(
         _add_issue(result, BuildIssue(operation.uid, operation.title, str(error)))
 
 
+def _resolve_repetition_formulas(
+    repetition: RepetitionBlock,
+    stock: Stock,
+) -> RepetitionBlock:
+    if not repetition.expressions:
+        return repetition
+    placement = replace(repetition.placement)
+    variables = machining_formula_variables(stock_x=stock.width, stock_y=stock.height)
+    integer_fields = {"count", "columns", "rows"}
+    for key, expression in repetition.expressions.items():
+        if not hasattr(placement, key):
+            raise ValueError(f"La formule du champ inconnu {key} ne peut pas être évaluée.")
+        current = getattr(placement, key)
+        if isinstance(current, (bool, str, PlacementMode)):
+            raise ValueError(f"Le champ {key} n’accepte pas de formule numérique.")
+        value = evaluate_numeric_expression(expression, variables)
+        if key in integer_fields:
+            if not math.isclose(value, round(value), abs_tol=1e-9):
+                raise ValueError(f"Le champ {key} attend un nombre entier.")
+            value = int(round(value))
+        setattr(placement, key, value)
+    return replace(repetition, placement=placement)
+
+
 def build_project(project: Project, adapter: MachineAdapter) -> BuildResult:
     result = BuildResult()
     by_uid = {operation.uid: operation for operation in project.operations}
-    for repetition in project.repetitions:
-        if not repetition.enabled:
+    for stored_repetition in project.repetitions:
+        if not stored_repetition.enabled:
             continue
         operations = [
             by_uid[uid]
-            for uid in repetition.operation_uids
+            for uid in stored_repetition.operation_uids
             if uid in by_uid and by_uid[uid].enabled
         ]
         if not operations:
+            continue
+        try:
+            repetition = _resolve_repetition_formulas(stored_repetition, project.stock)
+        except (TypeError, ValueError, ZeroDivisionError) as error:
+            operation = operations[0]
+            _add_issue(result, BuildIssue(operation.uid, operation.title, str(error)))
             continue
         if (
             repetition.placement.mode is PlacementMode.SINGLE

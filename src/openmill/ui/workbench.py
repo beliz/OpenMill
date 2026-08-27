@@ -43,6 +43,8 @@ from openmill.core.models import (
 from openmill.core.project_io import load_project, save_project
 from openmill.core.registry import registry
 from openmill.integration.bridge import ProgramBridge, ProgramLoadError, prepare_and_load_program
+from openmill.integration.i18n import retranslate_widget_tree, translate_text
+from openmill.integration.runtime import configured_language
 from openmill.ui.operation_form import OperationForm
 from openmill.ui.operation_picker import OperationPickerDialog
 from openmill.ui.preview_2d import VectorPreview
@@ -138,6 +140,7 @@ class ConversationalWorkbench(QWidget):
         self._populate_stock()
         self._populate_operations()
         self._rebuild()
+        retranslate_widget_tree(self)
 
     @property
     def project(self) -> Project:
@@ -153,7 +156,7 @@ class ConversationalWorkbench(QWidget):
 
     def _stock_spinbox(self, value: float) -> QDoubleSpinBox:
         widget = QDoubleSpinBox()
-        widget.setLocale(QLocale(QLocale.French, QLocale.France))
+        widget.setLocale(QLocale(configured_language()))
         widget.setRange(0.1, 10_000)
         widget.setDecimals(1)
         widget.setSuffix(" mm")
@@ -179,7 +182,7 @@ class ConversationalWorkbench(QWidget):
         piece_heading.addWidget(self._version_label)
         layout.addLayout(piece_heading)
 
-        self._project_name = QLineEdit(self._project.name)
+        self._project_name = QLineEdit(translate_text(self._project.name))
         self._project_name.setObjectName("projectName")
         self._project_name.setMinimumHeight(38)
         self._project_name.setPlaceholderText("Nom de la pièce")
@@ -294,9 +297,9 @@ class ConversationalWorkbench(QWidget):
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
         self._form_stack = QStackedWidget()
-        self._form = OperationForm(self._adapter)
+        self._form = OperationForm(self._adapter, stock_provider=lambda: self._project.stock)
         self._form.operation_changed.connect(self._selected_operation_changed)
-        self._repetition_form = RepetitionForm()
+        self._repetition_form = RepetitionForm(stock_provider=lambda: self._project.stock)
         self._repetition_form.repetition_changed.connect(self._selected_repetition_changed)
         self._form_stack.addWidget(self._form)
         self._form_stack.addWidget(self._repetition_form)
@@ -342,7 +345,9 @@ class ConversationalWorkbench(QWidget):
 
     def _toggle_gcode(self, visible: bool) -> None:
         self._gcode.setVisible(visible)
-        self._gcode_toggle.setText("Masquer le programme" if visible else "Afficher le programme")
+        self._gcode_toggle.setText(
+            translate_text("Masquer le programme" if visible else "Afficher le programme")
+        )
 
     def _populate_stock(self) -> None:
         for widget, value in (
@@ -402,16 +407,30 @@ class ConversationalWorkbench(QWidget):
 
     @staticmethod
     def _operation_item_text(operation: OperationRecord) -> str:
-        return f"{operation.title}\nT{operation.tool_number}"
+        return f"{translate_text(operation.title)}\nT{operation.tool_number}"
 
     @staticmethod
     def _repetition_item_text(repetition: RepetitionBlock) -> str:
-        order = (
+        order = translate_text(
             "par position"
             if repetition.execution_order is RepetitionOrder.BY_POSITION
             else "par opération"
         )
-        return f"{repetition.title}\n{repetition.placement.summary}  ·  {order}"
+        label = translate_text(repetition.placement.label)
+        title = f"{translate_text('Répétition')} [{label}]"
+        if repetition.placement.mode.value == "single":
+            summary = translate_text("Position unique")
+        elif repetition.placement.mode.value == "grid":
+            summary = (
+                f"{translate_text('Grille')} · {repetition.placement.columns} "
+                f"× {repetition.placement.rows}"
+            )
+        else:
+            summary = (
+                f"{label} · {repetition.placement.count} "
+                f"{translate_text('positions')}"
+            )
+        return f"{title}\n{summary}  ·  {order}"
 
     def _selected_operation(self) -> OperationRecord | None:
         item = self._program_tree.currentItem()
@@ -447,17 +466,31 @@ class ConversationalWorkbench(QWidget):
             self._preview_2d.set_content(self._project, self._result, selected_uid=self._selected_uid(), plane=self._plane)
         self._gcode.setPlainText(self.generated_gcode)
         count = len(self._result.toolpaths)
-        self._summary.setText(f"{count} opération{'s' if count != 1 else ''}  ·  ≈ {self._result.estimated_minutes:.1f} min")
+        count_template = (
+            "{count} opération  ·  ≈ {minutes:.1f} min"
+            if count == 1
+            else "{count} opérations  ·  ≈ {minutes:.1f} min"
+        )
+        self._summary.setText(
+            translate_text(count_template).format(
+                count=count,
+                minutes=self._result.estimated_minutes,
+            )
+        )
         if self._result.errors:
             self._issues.setObjectName("error")
-            self._issues.setText(f"⚠ {self._result.errors[0].operation_title} : {self._result.errors[0].message}")
+            self._issues.setText(
+                f"⚠ {translate_text(self._result.errors[0].operation_title)} : "
+                f"{translate_text(self._result.errors[0].message)}"
+            )
         elif self._result.warnings:
             self._issues.setObjectName("warning")
-            self._issues.setText(f"⚠ {self._result.warnings[0].message}")
+            self._issues.setText(f"⚠ {translate_text(self._result.warnings[0].message)}")
         else:
-            self._issues.setText("Trajectoires générées")
+            self._issues.setText(translate_text("Trajectoires générées"))
         self._issues.style().unpolish(self._issues)
         self._issues.style().polish(self._issues)
+        retranslate_widget_tree(self)
 
     def _rename_project(self, name: str) -> None:
         self._project.name = name.strip() or "Nouvelle pièce"
@@ -468,6 +501,8 @@ class ConversationalWorkbench(QWidget):
         self._project.stock.height = self._stock_height.value()
         self._project.stock.thickness = self._stock_thickness.value()
         self._project.stock.origin = OriginMode(self._origin.currentData())
+        self._form.refresh_formula_variables()
+        self._repetition_form.refresh_formula_variables()
         self._schedule_refresh()
 
     def _selection_changed(self, current, _previous) -> None:
@@ -664,7 +699,7 @@ class ConversationalWorkbench(QWidget):
     def new_project(self) -> None:
         self._project = Project()
         self._path = None
-        self._project_name.setText(self._project.name)
+        self._project_name.setText(translate_text(self._project.name))
         self._populate_stock()
         self._populate_operations()
         self._rebuild()
@@ -673,16 +708,16 @@ class ConversationalWorkbench(QWidget):
         if filename is None:
             filename, _filter = QFileDialog.getOpenFileName(
                 self,
-                "Ouvrir un projet OpenMill",
+                translate_text("Ouvrir un projet OpenMill"),
                 "",
-                "Projets OpenMill (*.openmill.json *.json);;Tous les fichiers (*)",
+                translate_text("Projets OpenMill (*.openmill.json *.json);;Tous les fichiers (*)"),
             )
         if not filename:
             return
         try:
             self._project = load_project(filename)
         except (OSError, ValueError, TypeError) as error:
-            QMessageBox.critical(self, "Ouverture impossible", str(error))
+            QMessageBox.critical(self, translate_text("Ouverture impossible"), str(error))
             return
         self._path = Path(filename)
         self._project_name.setText(self._project.name)
@@ -696,16 +731,16 @@ class ConversationalWorkbench(QWidget):
             default = f"{self._project.name}.openmill.json"
             filename, _filter = QFileDialog.getSaveFileName(
                 self,
-                "Enregistrer le projet OpenMill",
+                translate_text("Enregistrer le projet OpenMill"),
                 default,
-                "Projets OpenMill (*.openmill.json);;JSON (*.json)",
+                translate_text("Projets OpenMill (*.openmill.json);;JSON (*.json)"),
             )
         if not filename:
             return False
         try:
             save_project(self._project, filename)
         except OSError as error:
-            QMessageBox.critical(self, "Enregistrement impossible", str(error))
+            QMessageBox.critical(self, translate_text("Enregistrement impossible"), str(error))
             return False
         self._path = Path(filename)
         return True
@@ -713,30 +748,42 @@ class ConversationalWorkbench(QWidget):
     def export_gcode(self, filename: str | None = None) -> bool:
         self._rebuild()
         if self._result.errors:
-            QMessageBox.warning(self, "Export impossible", "Corrige les opérations en erreur avant d’exporter le programme.")
+            QMessageBox.warning(
+                self,
+                translate_text("Export impossible"),
+                translate_text("Corrige les opérations en erreur avant d’exporter le programme."),
+            )
             return False
         if not self._result.toolpaths:
-            QMessageBox.warning(self, "Export impossible", "Ajoute au moins une opération valide.")
+            QMessageBox.warning(
+                self,
+                translate_text("Export impossible"),
+                translate_text("Ajoute au moins une opération valide."),
+            )
             return False
         if filename is None:
             filename, _filter = QFileDialog.getSaveFileName(
                 self,
-                "Exporter le programme LinuxCNC",
+                translate_text("Exporter le programme LinuxCNC"),
                 f"{self._project.name}.ngc",
-                "Programmes LinuxCNC (*.ngc);;Tous les fichiers (*)",
+                translate_text("Programmes LinuxCNC (*.ngc);;Tous les fichiers (*)"),
             )
         if not filename:
             return False
         try:
             Path(filename).write_text(self.generated_gcode, encoding="ascii", newline="\n")
         except OSError as error:
-            QMessageBox.critical(self, "Export impossible", str(error))
+            QMessageBox.critical(self, translate_text("Export impossible"), str(error))
             return False
         return True
 
     def load_into_host(self) -> bool:
         if self._program_bridge is None:
-            QMessageBox.warning(self, "Chargement indisponible", "Aucune connexion Probe Basic n’est active.")
+            QMessageBox.warning(
+                self,
+                translate_text("Chargement indisponible"),
+                translate_text("Aucune connexion Probe Basic n’est active."),
+            )
             return False
         self._rebuild()
         try:
@@ -747,10 +794,14 @@ class ConversationalWorkbench(QWidget):
                 output_directory=self._program_directory,
             )
         except (ProgramLoadError, OSError, ValueError) as error:
-            QMessageBox.warning(self, "Chargement impossible", str(error))
+            QMessageBox.warning(self, translate_text("Chargement impossible"), str(error))
             return False
         self.program_loaded.emit(str(destination))
-        self._issues.setText(f"Programme chargé : {destination.name} · départ cycle manuel")
+        self._issues.setText(
+            translate_text("Programme chargé : {name} · départ cycle manuel").format(
+                name=destination.name
+            )
+        )
         return True
 
     def create_file_actions(self, parent: QWidget) -> list[QAction]:

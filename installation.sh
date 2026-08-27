@@ -19,6 +19,10 @@ readonly THEME_MARKER_BEGIN="# BEGIN OPENMILL THEME"
 readonly THEME_MARKER_END="# END OPENMILL THEME"
 readonly THEME_PREVIOUS_PREFIX="# OPENMILL_PREVIOUS_THEME = "
 readonly THEME_ABSENT="__ABSENT__"
+readonly LANGUAGE_MARKER_BEGIN="# BEGIN OPENMILL LANGUAGE"
+readonly LANGUAGE_MARKER_END="# END OPENMILL LANGUAGE"
+readonly LANGUAGE_PREVIOUS_PREFIX="# OPENMILL_PREVIOUS_LANGUAGE = "
+readonly LANGUAGE_ABSENT="__ABSENT__"
 readonly MANAGED_MARKER=".openmill-managed"
 readonly SPLASH_MANAGED_MARKER=".openmill-splash-managed"
 
@@ -28,6 +32,7 @@ CONFIG_DIR=""
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 STRICT=0
 THEME_CHOICE=""
+LANGUAGE_CHOICE=""
 
 usage() {
     cat <<'EOF'
@@ -38,6 +43,7 @@ Options :
   --config-dir DOSSIER dossier de configuration contenant le fichier INI
   --python COMMANDE    Python utilisé par Probe Basic (défaut : python3)
   --theme THEME        thème Probe Basic : modern ou original
+  --language LANGUE    langue de l'interface : fr ou en_US
   --strict             échouer si LinuxCNC, QtPyVCP ou Probe Basic est absent
   --uninstall          raccourci équivalent à l'action uninstall
   -h, --help           afficher cette aide
@@ -76,6 +82,11 @@ while (($#)); do
             THEME_CHOICE="${2,,}"
             shift
             ;;
+        --language)
+            (($# >= 2)) || die "--language attend fr ou en_US."
+            LANGUAGE_CHOICE="$2"
+            shift
+            ;;
         --strict) STRICT=1 ;;
         -h|--help) usage; exit 0 ;;
         *) die "Option inconnue : $1" ;;
@@ -85,6 +96,13 @@ done
 
 [[ -z "$THEME_CHOICE" || "$THEME_CHOICE" == "modern" || "$THEME_CHOICE" == "original" ]] \
     || die "Thème inconnu : $THEME_CHOICE (valeurs : modern, original)."
+
+case "${LANGUAGE_CHOICE,,}" in
+    "") ;;
+    fr|fr_fr|français|francais) LANGUAGE_CHOICE="fr" ;;
+    en|en_us|us|english) LANGUAGE_CHOICE="en_US" ;;
+    *) die "Langue inconnue : $LANGUAGE_CHOICE (valeurs : fr, en_US)." ;;
+esac
 
 [[ -d "$SOURCE_DIR/openmill" ]] || die "Le dossier src/openmill est introuvable."
 [[ -f "$USER_TAB_SOURCE/openmill.py" && -f "$USER_TAB_SOURCE/openmill.ui" ]] \
@@ -364,6 +382,142 @@ remove_theme_ini_block() {
     success "Ancien réglage OPENMILL_THEME restauré."
 }
 
+read_openmill_language() {
+    awk '
+        /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+            line=tolower($0); gsub(/[[:space:]]/, "", line)
+            in_display=(line == "[display]")
+            next
+        }
+        in_display && tolower($0) ~ /^[[:space:]]*openmill_language[[:space:]]*=/ {
+            value=$0
+            sub(/^[^=]*=[[:space:]]*/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            print value
+            exit
+        }
+    ' "$INI_FILE"
+}
+
+choose_language() {
+    [[ -z "$LANGUAGE_CHOICE" ]] || return 0
+    if [[ ! -t 0 ]]; then
+        case "$(read_openmill_language)" in
+            en|en_*) LANGUAGE_CHOICE="en_US" ;;
+            *) LANGUAGE_CHOICE="fr" ;;
+        esac
+        return 0
+    fi
+
+    local current default_choice choice
+    current="$(read_openmill_language)"
+    default_choice="1"
+    [[ "${current,,}" == en* ]] && default_choice="2"
+    printf '\nLangue de l’interface OpenMill et Probe Basic :\n'
+    printf '  1) Français\n'
+    printf '  2) English (US)\n'
+    read -r -p "Choix [${default_choice}] : " choice
+    choice="${choice:-$default_choice}"
+    case "${choice,,}" in
+        1|fr|fr_fr|français|francais) LANGUAGE_CHOICE="fr" ;;
+        2|en|en_us|us|english) LANGUAGE_CHOICE="en_US" ;;
+        *) die "Choix de langue invalide : $choice" ;;
+    esac
+}
+
+add_language_ini_block() {
+    local temporary backup previous
+    temporary="$(mktemp "${INI_FILE}.openmill.XXXXXX")"
+    backup="${INI_FILE}.openmill-backup-language-$(date +%Y%m%d-%H%M%S)"
+    cp -a -- "$INI_FILE" "$backup"
+
+    if grep -Fq "$LANGUAGE_MARKER_BEGIN" "$INI_FILE"; then
+        awk \
+            -v begin="$LANGUAGE_MARKER_BEGIN" \
+            -v end="$LANGUAGE_MARKER_END" \
+            -v language="$LANGUAGE_CHOICE" '
+            $0 == begin { inside=1; written=0; print; next }
+            inside && tolower($0) ~ /^[[:space:]]*openmill_language[[:space:]]*=/ {
+                if (!written) print "OPENMILL_LANGUAGE = " language
+                written=1
+                next
+            }
+            $0 == end {
+                if (inside && !written) print "OPENMILL_LANGUAGE = " language
+                inside=0
+                print
+                next
+            }
+            { print }
+        ' "$INI_FILE" > "$temporary"
+    else
+        previous="$(read_openmill_language)"
+        [[ -n "$previous" ]] || previous="$LANGUAGE_ABSENT"
+        if ! awk \
+            -v begin="$LANGUAGE_MARKER_BEGIN" \
+            -v end="$LANGUAGE_MARKER_END" \
+            -v prefix="$LANGUAGE_PREVIOUS_PREFIX" \
+            -v previous="$previous" \
+            -v language="$LANGUAGE_CHOICE" '
+            function insert_block(add_separator) {
+                if (add_separator) print ""
+                print begin
+                print prefix previous
+                print "OPENMILL_LANGUAGE = " language
+                print end
+                inserted=1
+            }
+            /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+                line=tolower($0); gsub(/[[:space:]]/, "", line)
+                if (in_display && !inserted) insert_block(1)
+                in_display=(line == "[display]")
+                if (in_display) found_display=1
+            }
+            in_display && tolower($0) ~ /^[[:space:]]*openmill_language[[:space:]]*=/ {
+                if (!inserted) insert_block(0)
+                next
+            }
+            { print }
+            END {
+                if (in_display && !inserted) insert_block(1)
+                if (!found_display) exit 42
+            }
+        ' "$INI_FILE" > "$temporary"; then
+            rm -f -- "$temporary"
+            die "Impossible de configurer OPENMILL_LANGUAGE dans [DISPLAY]."
+        fi
+    fi
+    chmod --reference="$INI_FILE" "$temporary" 2>/dev/null || true
+    mv -- "$temporary" "$INI_FILE"
+    success "Langue configurée : $LANGUAGE_CHOICE (sauvegarde : $backup)."
+}
+
+remove_language_ini_block() {
+    grep -Fq "$LANGUAGE_MARKER_BEGIN" "$INI_FILE" || return 0
+    local temporary
+    temporary="$(mktemp "${INI_FILE}.openmill.XXXXXX")"
+    awk \
+        -v begin="$LANGUAGE_MARKER_BEGIN" \
+        -v end="$LANGUAGE_MARKER_END" \
+        -v prefix="$LANGUAGE_PREVIOUS_PREFIX" \
+        -v absent="$LANGUAGE_ABSENT" '
+        $0 == begin { skipping=1; previous=absent; next }
+        skipping && index($0, prefix) == 1 {
+            previous=substr($0, length(prefix) + 1)
+            next
+        }
+        $0 == end {
+            if (previous != absent) print "OPENMILL_LANGUAGE = " previous
+            skipping=0
+            next
+        }
+        !skipping { print }
+    ' "$INI_FILE" > "$temporary"
+    chmod --reference="$INI_FILE" "$temporary" 2>/dev/null || true
+    mv -- "$temporary" "$INI_FILE"
+    success "Ancien réglage OPENMILL_LANGUAGE restauré."
+}
+
 read_intro_graphic() {
     awk '
         /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
@@ -553,7 +707,7 @@ remove_user_tab() {
 }
 
 run_checks() {
-    local tabs_root="$1" target="$2" failures=0 version_file version splash_target theme
+    local tabs_root="$1" target="$2" failures=0 version_file version splash_target theme language
     info "Vérification de l'installation…"
     [[ -f "$target/openmill.py" && -f "$target/openmill.ui" ]] \
         && success "Onglet utilisateur complet." \
@@ -566,6 +720,13 @@ run_checks() {
         success "Thème Probe Basic : $theme."
     else
         warning "OPENMILL_THEME doit valoir modern ou original."
+        failures=$((failures + 1))
+    fi
+    language="$(read_openmill_language)"
+    if [[ "$language" == "fr" || "$language" == "en_US" ]]; then
+        success "Langue OpenMill / Probe Basic : $language."
+    else
+        warning "OPENMILL_LANGUAGE doit valoir fr ou en_US."
         failures=$((failures + 1))
     fi
     splash_target="${CONFIG_DIR}/${SPLASH_FILENAME}"
@@ -651,7 +812,9 @@ tab_target="${tabs_root}/openmill"
 case "$ACTION" in
     install)
         choose_theme
+        choose_language
         add_theme_ini_block
+        add_language_ini_block
         install_python_link
         install_user_tab "$tab_target"
         install_splash
@@ -667,6 +830,7 @@ case "$ACTION" in
         remove_user_tab "$tab_target"
         remove_python_link
         remove_splash
+        remove_language_ini_block
         remove_theme_ini_block
         remove_ini_block
         success "Désinstallation terminée. Les sauvegardes INI éventuelles sont conservées."

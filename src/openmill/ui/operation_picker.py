@@ -17,11 +17,13 @@ from openmill.ui.qt_widgets import (
     QPushButton,
     QScrollArea,
     QScroller,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from openmill.core.registry import OperationPlugin, registry
+from openmill.integration.i18n import retranslate_widget_tree, translate_text
 
 
 CATEGORY_COLORS = {
@@ -208,16 +210,18 @@ class OperationTile(QPushButton):
         super().__init__(parent)
         self.plugin = plugin
         self._accent = QColor(CATEGORY_COLORS.get(plugin.category, "#57d7a8"))
-        self.setMinimumSize(215, 195)
+        self.setMinimumWidth(215)
+        self.setFixedHeight(195)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.StrongFocus)
-        self.setAccessibleName(plugin.label)
-        self.setAccessibleDescription(plugin.description)
-        self.setToolTip(plugin.description)
+        self.setAccessibleName(translate_text(plugin.label))
+        self.setAccessibleDescription(translate_text(plugin.description))
+        self.setToolTip(translate_text(plugin.description))
         self.setMouseTracking(True)
 
     def sizeHint(self) -> QSize:
-        return QSize(255, 205)
+        return QSize(255, 195)
 
     def enterEvent(self, event) -> None:
         self.update()
@@ -251,7 +255,7 @@ class OperationTile(QPushButton):
         painter.drawText(
             QRectF(14, title_top, self.width() - 28, 38),
             Qt.AlignLeft | Qt.AlignVCenter | Qt.TextWordWrap,
-            self.plugin.label,
+            translate_text(self.plugin.label),
         )
 
         description_font = QFont("Segoe UI", 8)
@@ -260,7 +264,7 @@ class OperationTile(QPushButton):
         painter.drawText(
             QRectF(14, title_top + 39, self.width() - 28, max(self.height() - title_top - 44, 19)),
             Qt.AlignLeft | Qt.AlignTop | Qt.TextWordWrap,
-            self.plugin.description,
+            translate_text(self.plugin.description),
         )
 
 
@@ -355,19 +359,24 @@ class OperationPickerDialog(QDialog):
                     or search in plugin.label.casefold()
                     or search in plugin.description.casefold()
                     or search in category.casefold()
+                    or search in translate_text(plugin.label).casefold()
+                    or search in translate_text(plugin.description).casefold()
+                    or search in translate_text(category).casefold()
                 )
             ]
             if not matching:
                 continue
 
             section = QFrame()
+            section.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             layout = QVBoxLayout(section)
             layout.setContentsMargins(1, 0, 1, 0)
             layout.setSpacing(9)
-            title = QLabel(f"{category.upper()}  ·  {len(matching)}")
+            title = QLabel(f"{translate_text(category).upper()}  ·  {len(matching)}")
             title.setObjectName("pickerCategory")
             layout.addWidget(title)
             cards = QGridLayout()
+            cards.setAlignment(Qt.AlignTop)
             cards.setHorizontalSpacing(11)
             cards.setVerticalSpacing(11)
             for index, plugin in enumerate(matching):
@@ -377,6 +386,8 @@ class OperationPickerDialog(QDialog):
                 visible_count += 1
             for column in range(columns):
                 cards.setColumnStretch(column, 1)
+            for row in range((len(matching) + columns - 1) // columns):
+                cards.setRowMinimumHeight(row, 195)
             layout.addLayout(cards)
             self._sections.addWidget(section)
 
@@ -387,6 +398,7 @@ class OperationPickerDialog(QDialog):
             empty.setMinimumHeight(140)
             self._sections.addWidget(empty)
         self._sections.addStretch()
+        retranslate_widget_tree(self)
 
     def _choose(self, plugin_id: str) -> None:
         self.selected_plugin_id = plugin_id

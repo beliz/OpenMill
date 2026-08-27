@@ -7,6 +7,7 @@ from openmill.core.parameter_controls import (
     evaluate_field_expression,
     evaluate_numeric_expression,
     is_calculation_expression,
+    machining_formula_variables,
     normalize_dial_angle,
     recommended_step,
     uses_angle_dial,
@@ -30,6 +31,12 @@ class ParameterInteractionTests(unittest.TestCase):
             evaluate_numeric_expression("5+tool_diam/2", {"tool_diam": 20}),
             15,
         )
+
+    def test_stock_dimensions_and_french_aliases_share_the_same_values(self) -> None:
+        variables = machining_formula_variables(stock_x=120, stock_y=80, tool_diam=20)
+        self.assertEqual(evaluate_numeric_expression("stock_x/2", variables), 60)
+        self.assertEqual(evaluate_numeric_expression("stock_y+brut_y", variables), 160)
+        self.assertEqual(evaluate_numeric_expression("brut_x/2-tool_diam", variables), 40)
 
     def test_tool_diameter_formula_is_normalized_for_the_field(self) -> None:
         specification = FieldSpec("offset", "Décalage", 0.0, decimals=2)

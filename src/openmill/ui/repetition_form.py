@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
-from openmill.core.models import PlacementMode, RepetitionBlock, RepetitionOrder
-from openmill.core.parameter_controls import uses_angle_dial, uses_percentage_slider
+from collections.abc import Callable
+
+from openmill.core.models import PlacementMode, RepetitionBlock, RepetitionOrder, Stock
+from openmill.core.parameter_controls import (
+    machining_formula_variables,
+    uses_angle_dial,
+    uses_percentage_slider,
+)
 from openmill.core.registry import FieldSpec
+from openmill.integration.i18n import retranslate_widget_tree, translate_text
 from openmill.ui.parameter_controls import (
     AngleControl,
     PercentageControl,
@@ -28,9 +35,16 @@ from openmill.ui.qt_widgets import (
 class RepetitionForm(QWidget):
     repetition_changed = pyqtSignal()
 
-    def __init__(self, parent=None) -> None:
+    def __init__(
+        self,
+        parent=None,
+        *,
+        stock_provider: Callable[[], Stock] | None = None,
+    ) -> None:
         super().__init__(parent)
+        self._stock_provider = stock_provider
         self._repetition: RepetitionBlock | None = None
+        self._formula_controls: list[QWidget] = []
         self._loading = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 14, 18, 14)
@@ -44,7 +58,7 @@ class RepetitionForm(QWidget):
         self._description.setObjectName("muted")
         layout.addWidget(self._description)
         calculation_hint = QLabel(
-            "Astuce · calculs acceptés : 120/2, 40+5, 12*3 et parenthèses."
+            "Astuce · variables : stock_x et stock_y (alias : brut_x et brut_y)."
         )
         calculation_hint.setObjectName("muted")
         layout.addWidget(calculation_hint)
@@ -65,6 +79,7 @@ class RepetitionForm(QWidget):
     def set_repetition(self, repetition: RepetitionBlock | None) -> None:
         self._loading = True
         self._repetition = repetition
+        self._formula_controls = []
         for row in range(self._form.rowCount()):
             self._form.setRowStretch(row, 0)
         while self._form.count():
@@ -75,7 +90,9 @@ class RepetitionForm(QWidget):
             self._heading.setText("Répétition")
             self._loading = False
             return
-        self._heading.setText(repetition.title)
+        self._heading.setText(
+            f"{translate_text('Répétition')} [{translate_text(repetition.placement.label)}]"
+        )
         row = 0
         self._form.addWidget(
             self._card(PLACEMENT_MODE, self._placement_control(PLACEMENT_MODE, repetition)),
@@ -102,6 +119,7 @@ class RepetitionForm(QWidget):
         stretch_row = row + (len(PLACEMENT_FIELDS[repetition.placement.mode]) + 1) // 2
         self._form.setRowStretch(stretch_row, 1)
         self._loading = False
+        retranslate_widget_tree(self)
 
     def _card(self, specification: FieldSpec, control: QWidget) -> QFrame:
         card = QFrame()
@@ -129,18 +147,45 @@ class RepetitionForm(QWidget):
         expression: str = "",
         expression_callback=None,
     ) -> QWidget:
+        variables = self._formula_variables()
         if specification.kind == "choice":
             field = SegmentedChoice(specification, value)
         elif uses_angle_dial(specification):
-            field = AngleControl(specification, float(value), expression=expression)
+            field = AngleControl(
+                specification,
+                float(value),
+                expression=expression,
+                variables=variables,
+            )
         elif uses_percentage_slider(specification):
-            field = PercentageControl(specification, float(value), expression=expression)
+            field = PercentageControl(
+                specification,
+                float(value),
+                expression=expression,
+                variables=variables,
+            )
         else:
-            field = TouchNumberControl(specification, value, expression=expression)
+            field = TouchNumberControl(
+                specification,
+                value,
+                expression=expression,
+                variables=variables,
+            )
         field.value_changed.connect(callback)
         if expression_callback is not None and hasattr(field, "expression_changed"):
             field.expression_changed.connect(expression_callback)
+        if hasattr(field, "set_variables"):
+            self._formula_controls.append(field)
         return field
+
+    def _formula_variables(self) -> dict[str, float]:
+        stock = self._stock_provider() if self._stock_provider is not None else Stock()
+        return machining_formula_variables(stock_x=stock.width, stock_y=stock.height)
+
+    def refresh_formula_variables(self) -> None:
+        variables = self._formula_variables()
+        for control in self._formula_controls:
+            control.set_variables(variables)
 
     def _placement_control(self, specification: FieldSpec, repetition: RepetitionBlock) -> QWidget:
         value = getattr(repetition.placement, specification.key)

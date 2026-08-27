@@ -230,6 +230,20 @@ class OperationTests(unittest.TestCase):
         self.assertEqual(plunge.end.x, 15)
         self.assertEqual(operation.parameters["center_x"], 0)
 
+    def test_project_build_recomputes_stock_dimension_formulas(self) -> None:
+        operation = registry.get("drill_single").create_record(self.stock, 5)
+        operation.parameters.update(center_x=0, center_y=0)
+        operation.expressions.update(center_x="stock_x/2", center_y="brut_y/2")
+
+        result = build_project(Project(stock=self.stock, operations=[operation]), self.adapter)
+
+        self.assertFalse(result.errors)
+        plunge = next(
+            motion for motion in result.toolpaths[0].motions if motion.kind is MotionKind.PLUNGE
+        )
+        self.assertEqual((plunge.end.x, plunge.end.y), (60, 40))
+        self.assertEqual((operation.parameters["center_x"], operation.parameters["center_y"]), (0, 0))
+
     def test_disabled_operations_are_ignored(self) -> None:
         operation = registry.get("facing").create_record(self.stock)
         operation.enabled = False

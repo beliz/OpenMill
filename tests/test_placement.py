@@ -70,6 +70,29 @@ class PlacementTests(unittest.TestCase):
         self.assertEqual(restored.operations[0].expressions["center_x"], "120/2")
         self.assertEqual(restored.repetitions[0].expressions["diameter"], "120/2")
 
+    def test_repetition_formulas_use_stock_dimensions_at_build_time(self) -> None:
+        operation = self.operation()
+        repetition = RepetitionBlock(operation_uids=[operation.uid])
+        repetition.placement.mode = PlacementMode.POLAR
+        repetition.placement.center_x = self.stock.width / 2
+        repetition.placement.center_y = self.stock.height / 2
+        repetition.placement.count = 2
+        repetition.expressions["diameter"] = "stock_x/2"
+
+        result = build_project(
+            Project(stock=self.stock, operations=[operation], repetitions=[repetition]),
+            self.adapter,
+        )
+
+        self.assertFalse(result.errors)
+        plunges = [
+            motion.end
+            for motion in result.toolpaths[0].motions
+            if motion.kind is MotionKind.PLUNGE
+        ]
+        self.assertEqual(len(plunges), 2)
+        self.assertAlmostEqual(abs(plunges[0].x - plunges[1].x), 60)
+
     def test_schema_one_pattern_is_migrated_to_a_repetition_block(self) -> None:
         restored = loads_project(
             '{"schema_version":1,"operations":[{"plugin_id":"drill_single",'
