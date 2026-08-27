@@ -2,7 +2,7 @@
 
 Atelier conversationnel de fraisage CNC, pensé pour être développé sous **Windows**, utilisé avec **LinuxCNC**, puis intégré proprement dans **Probe Basic / QtPyVCP**.
 
-**Version 0.7.1 — répétitions fiabilisées et champs de paramètres calculables.**
+**Version 0.8.0 — interface de préparation simplifiée et version visible.**
 
 L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d’usinage, les opérations, les aperçus et la connexion machine sont séparés. Le même `QWidget` peut fonctionner comme application autonome ou devenir un onglet d’une interface LinuxCNC.
 
@@ -63,6 +63,8 @@ L’objectif n’est pas de créer un fork difficile à maintenir : le moteur d�
 - Diagnostic d’installation et parcours d’intégration simulé utilisables sous Windows.
 - Thème global Probe Basic moderne et réversible, sans remplacer sa police condensée ni casser ses dimensions fixes.
 - Mode préparation pleine fenêtre : le jog latéral et les commandes machine inférieures de Probe Basic sont masqués uniquement pendant l’édition conversationnelle.
+- Bandeau OpenMill supprimé : nom de pièce et version regroupés au-dessus du brut dans la colonne gauche.
+- Thème Probe Basic piloté uniquement par `OPENMILL_THEME` dans la configuration, sans interrupteur dans l’interface.
 - Formulaires larges sur deux colonnes, placés avant un aperçu de contrôle moins envahissant.
 - Extensions d’opérations installables indépendamment via les entry points Python.
 - Tests métier sans Qt, VTK ni LinuxCNC ; CI GitHub Windows et Linux.
@@ -267,11 +269,15 @@ USER_TABS_PATH = user_tabs/
 
 Probe Basic ajoute alors un onglet **CONVERSATIONNEL** avec un bouton **Charger dans Probe Basic**. Procédure complète, sécurité et solution alternative : [docs/integration-probe-basic.md](docs/integration-probe-basic.md).
 
-Le bouton **Thème PB · moderne/original** permet de comparer instantanément le thème unifié et l’apparence native. Pour démarrer durablement avec le thème original :
+Le thème est choisi au démarrage depuis le fichier `.ini` de la machine, sans commande dans l’interface :
 
-```bash
-export OPENMILL_THEME=original
+```ini
+[DISPLAY]
+OPENMILL_THEME = original
 ```
+
+Valeurs reconnues pour désactiver le thème moderne : `original`, `off`, `none`, `0` et `false`.
+La variable d’environnement `OPENMILL_THEME` reste disponible comme surcharge temporaire.
 
 ## Architecture
 

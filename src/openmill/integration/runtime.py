@@ -47,6 +47,29 @@ def program_directory(
     return Path(fallback or Path.cwd() / "openmill-programs").expanduser().resolve()
 
 
+def configured_theme(
+    *,
+    environ: Mapping[str, str] | None = None,
+    default: str = "modern",
+) -> str:
+    """Read the OpenMill theme from the environment or the active machine INI."""
+
+    environment = os.environ if environ is None else environ
+    override = environment.get("OPENMILL_THEME", "").strip().lower()
+    if override:
+        return override
+    configured = environment.get("INI_FILE_NAME") or environment.get("LINUXCNC_INI")
+    if configured:
+        source = Path(configured).expanduser()
+        if source.is_file():
+            parser = ConfigParser(interpolation=None, strict=False)
+            parser.read(source, encoding="utf-8")
+            value = parser.get("DISPLAY", "OPENMILL_THEME", fallback=default).strip().lower()
+            if value:
+                return value
+    return default
+
+
 @dataclass(frozen=True, slots=True)
 class RuntimeReport:
     platform: str
@@ -108,4 +131,3 @@ def inspect_runtime(
         ini_path=ini,
         program_directory=str(program_directory(environ=environment)),
     )
-

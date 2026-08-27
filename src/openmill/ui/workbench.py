@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from openmill import __version__
 from openmill.ui.qt_core import QLocale, Qt, QTimer, pyqtSignal
 from openmill.ui.qt_gui import QKeySequence
 from openmill.ui.qt_widgets import (
@@ -119,7 +120,6 @@ class ConversationalWorkbench(QWidget):
         margin = 6 if embedded else 16
         outer.setContentsMargins(margin, margin, margin, margin)
         outer.setSpacing(6 if embedded else 11)
-        outer.addWidget(self._create_header())
 
         columns = QSplitter(Qt.Horizontal)
         columns.setChildrenCollapsible(False)
@@ -151,33 +151,6 @@ class ConversationalWorkbench(QWidget):
     def generated_gcode(self) -> str:
         return generate_gcode(self._project, self._result.toolpaths)
 
-    def _create_header(self) -> QWidget:
-        header = QFrame()
-        header.setObjectName("header")
-        layout = QHBoxLayout(header)
-        layout.setContentsMargins(16, 10, 14, 10)
-        if self._embedded:
-            layout.setContentsMargins(10, 4, 10, 4)
-            header.setMaximumHeight(44)
-        brand = QLabel("◈  OPENMILL")
-        brand.setObjectName("brand")
-        layout.addWidget(brand)
-        subtitle = QLabel("CONVERSATIONNEL")
-        subtitle.setObjectName("subtitle")
-        layout.addWidget(subtitle)
-        layout.addSpacing(18)
-        self._project_name = QLineEdit(self._project.name)
-        self._project_name.setMaximumWidth(350)
-        self._project_name.setPlaceholderText("Nom de la pièce")
-        self._project_name.textChanged.connect(self._rename_project)
-        layout.addWidget(self._project_name)
-        layout.addStretch()
-        self._machine_status = QLabel(f"●  {self._adapter.display_name}")
-        self._machine_status.setObjectName("status")
-        layout.addWidget(self._machine_status)
-        self._header = header
-        return header
-
     def _stock_spinbox(self, value: float) -> QDoubleSpinBox:
         widget = QDoubleSpinBox()
         widget.setLocale(QLocale(QLocale.French, QLocale.France))
@@ -194,6 +167,25 @@ class ConversationalWorkbench(QWidget):
         panel.setMaximumWidth(370)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(8 if self._embedded else 13, 6 if self._embedded else 12, 8 if self._embedded else 13, 6 if self._embedded else 12)
+
+        piece_heading = QHBoxLayout()
+        piece_label = QLabel("PIÈCE")
+        piece_label.setObjectName("section")
+        piece_heading.addWidget(piece_label)
+        piece_heading.addStretch()
+        self._version_label = QLabel(f"v{__version__}")
+        self._version_label.setObjectName("version")
+        self._version_label.setToolTip("Version installée d’OpenMill")
+        piece_heading.addWidget(self._version_label)
+        layout.addLayout(piece_heading)
+
+        self._project_name = QLineEdit(self._project.name)
+        self._project_name.setObjectName("projectName")
+        self._project_name.setMinimumHeight(38)
+        self._project_name.setPlaceholderText("Nom de la pièce")
+        self._project_name.setAccessibleName("Nom de la pièce")
+        self._project_name.textChanged.connect(self._rename_project)
+        layout.addWidget(self._project_name)
 
         title = QLabel("BRUT")
         title.setObjectName("section")

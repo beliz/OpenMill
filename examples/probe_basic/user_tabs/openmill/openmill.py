@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 
 from openmill.integration.probe_basic import OpenMillConversationalWidget
+from openmill.integration.runtime import configured_theme
 
 
 class UserTab(OpenMillConversationalWidget):
@@ -12,7 +13,7 @@ class UserTab(OpenMillConversationalWidget):
 
     def __init__(self, parent=None) -> None:
         simulation = os.environ.get("OPENMILL_SIMULATION", "").lower() in {"1", "true", "yes"}
-        theme = os.environ.get("OPENMILL_THEME", "modern").strip().lower()
+        theme = configured_theme()
         global_theme = theme not in {"original", "off", "none", "0", "false"}
         super().__init__(parent=parent, simulation=simulation, global_theme=global_theme)
         self.setObjectName("CONVERSATIONNEL")

@@ -149,22 +149,26 @@ L’onglet utilisateur active par défaut le thème sombre partagé entre OpenMi
 - harmonise aussi les nombreux styles locaux hérités du fichier `.ui` de Probe Basic ;
 - conserve la police condensée et les dimensions prévues par Probe Basic pour éviter les libellés tronqués ;
 - exclut les widgets dont le style est piloté dynamiquement par QtPyVCP, notamment l’arrêt d’urgence ;
-- peut être retiré immédiatement avec le bouton **Thème PB · moderne/original** dans l’en-tête OpenMill.
+- est choisi au démarrage, sans interrupteur dans l’interface d’usinage.
 
 Pour démarrer avec le thème Probe Basic d’origine :
 
-```bash
-export OPENMILL_THEME=original
-linuxcnc /chemin/vers/machine.ini
+```ini
+[DISPLAY]
+OPENMILL_THEME = original
 ```
 
 Valeurs reconnues pour désactiver le thème : `original`, `off`, `none`, `0` et `false`.
 
 Pour revenir au thème moderne au prochain lancement :
 
-```bash
-unset OPENMILL_THEME
+```ini
+[DISPLAY]
+OPENMILL_THEME = modern
 ```
+
+La variable d’environnement `OPENMILL_THEME` reste prioritaire lorsqu’elle est définie, ce qui
+permet un test ponctuel sans modifier le fichier machine.
 
 La modernisation globale reste expérimentale. Les composants de rendu VTK/OpenGL et les contrôles dont la couleur représente un état machine restent volontairement hors de la seconde passe. Une capture de chaque page aide à compléter progressivement les exceptions sans modifier les comportements machine.
 

@@ -74,7 +74,7 @@ class ThemeTests(unittest.TestCase):
         source = (
             self.root / "examples/probe_basic/user_tabs/openmill/openmill.py"
         ).read_text(encoding="utf-8")
-        self.assertIn('OPENMILL_THEME", "modern"', source)
+        self.assertIn("configured_theme()", source)
         self.assertIn('"original"', source)
 
 

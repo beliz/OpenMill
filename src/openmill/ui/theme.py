@@ -48,6 +48,12 @@ QFrame#panel QLabel, QFrame#header QLabel, QFrame#editor QLabel {
 QLabel#brand { font-size: 19px; font-weight: 700; color: #f4f7fc; }
 QLabel#dialogTitle { font-size: 23px; font-weight: 700; color: #f4f7fc; }
 QLabel#subtitle, QLabel#muted { color: #90a0b8; }
+QLabel#version {
+    color: #718198;
+    font-size: 10px;
+    font-weight: 600;
+    padding-top: 8px;
+}
 QLabel#section {
     color: #90a0b8;
     font-size: 10px;
@@ -116,6 +122,7 @@ QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
     border-color: #57d7a8;
 }
 QLineEdit#operationSearch { font-size: 13px; padding-left: 13px; border-radius: 9px; }
+QLineEdit#projectName { font-size: 13px; font-weight: 600; padding-left: 10px; }
 QLineEdit#scrubValue, QSpinBox#scrubValue, QDoubleSpinBox#scrubValue {
     background-color: #0b131e;
     color: #e9f3fb;

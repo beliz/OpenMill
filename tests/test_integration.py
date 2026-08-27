@@ -26,7 +26,12 @@ from openmill.integration.bridge import (
 )
 from openmill.integration.check import main as check_main
 from openmill.integration.qtpyvcp_compat import silence_gcode_properties_debug_output
-from openmill.integration.runtime import binding_candidates, inspect_runtime, program_directory
+from openmill.integration.runtime import (
+    binding_candidates,
+    configured_theme,
+    inspect_runtime,
+    program_directory,
+)
 
 
 class FakeStatus:
@@ -201,6 +206,24 @@ class RuntimeDiscoveryTests(unittest.TestCase):
         source.write_text("[DISPLAY]\nDISPLAY = probe_basic\n", encoding="utf-8")
         self.assertEqual(program_directory(environ={"INI_FILE_NAME": str(source)}), self.directory / "openmill-programs")
 
+    def test_theme_can_be_selected_in_machine_ini(self) -> None:
+        source = self.directory / "machine.ini"
+        source.write_text(
+            "[DISPLAY]\nDISPLAY = probe_basic\nOPENMILL_THEME = original\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(configured_theme(environ={"INI_FILE_NAME": str(source)}), "original")
+
+    def test_environment_theme_overrides_machine_ini(self) -> None:
+        source = self.directory / "machine.ini"
+        source.write_text("[DISPLAY]\nOPENMILL_THEME = original\n", encoding="utf-8")
+        self.assertEqual(
+            configured_theme(
+                environ={"INI_FILE_NAME": str(source), "OPENMILL_THEME": "modern"}
+            ),
+            "modern",
+        )
+
     def test_report_detects_installed_components_without_importing_them(self) -> None:
         available = {"PySide6", "vtk", "linuxcnc", "qtpyvcp", "probe_basic"}
         report = inspect_runtime(
@@ -268,6 +291,21 @@ class IntegrationPackageTests(unittest.TestCase):
         self.assertIn("widget.hide()", controller)
         self.assertIn("widget.show()", controller)
         self.assertNotIn("setParent", controller)
+
+    def test_workbench_uses_compact_left_project_identity(self) -> None:
+        source = (self.root / "src/openmill/ui/workbench.py").read_text(encoding="utf-8")
+        self.assertNotIn("_create_header", source)
+        self.assertNotIn("_machine_status", source)
+        self.assertIn('QLabel(f"v{__version__}")', source)
+        self.assertLess(source.index('QLabel("PIÈCE")'), source.index('QLabel("BRUT")'))
+
+    def test_probe_basic_theme_has_no_runtime_toggle(self) -> None:
+        source = (
+            self.root / "src/openmill/integration/probe_basic.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("_theme_button", source)
+        self.assertNotIn("_toggle_global_theme", source)
+        self.assertIn("install_probe_basic_theme()", source)
 
     def test_interactions_do_not_force_compatible_renderer(self) -> None:
         source = ast.parse((self.root / "src/openmill/ui/preview_3d.py").read_text(encoding="utf-8"))
